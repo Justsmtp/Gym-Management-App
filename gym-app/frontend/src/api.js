@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-// Use the deployed backend URL from environment variable
 const API_BASE = process.env.REACT_APP_API_URL;
 
 const api = axios.create({
@@ -8,11 +7,38 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach token if available
-api.interceptors.request.use((cfg) => {
-  const token = localStorage.getItem('token');
-  if (token) cfg.headers['x-auth-token'] = token;
-  return cfg;
-});
+
+// Request Interceptor
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers['x-auth-token'] = token;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response Interceptor
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid
+      localStorage.removeItem('token');
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('userType');
+      window.location.href = '/';
+    }
+    
+    // Log error for debugging
+    console.error('API Error:', error.response?.data || error.message);
+    
+    return Promise.reject(error);
+  }
+);
 
 export default api;
