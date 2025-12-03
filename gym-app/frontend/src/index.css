@@ -1,3 +1,8 @@
+/* ========================================
+   MOBILE RESPONSIVE CSS FOR USER DASHBOARD
+   Add this to your src/index.css file
+   ======================================== */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,8 +13,470 @@
   box-sizing: border-box;
 }
 
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ========================================
+   RESPONSIVE UTILITIES
+   ======================================== */
+
+/* Ensure all images are responsive */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Form inputs - prevent zoom on iOS */
+input,
+textarea,
+select,
+button {
+  font-size: 16px;
+}
+
+/* ========================================
+   SIDEBAR RESPONSIVE
+   ======================================== */
+
+/* Desktop sidebar */
+.user-sidebar {
+  width: 16rem; /* 256px / 64 in Tailwind */
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  z-index: 40;
+  transition: transform 0.3s ease;
+}
+
+/* Mobile sidebar - hidden by default */
+@media (max-width: 768px) {
+  .user-sidebar {
+    transform: translateX(-100%);
+  }
+  
+  .user-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  
+  /* Overlay when sidebar is open */
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 30;
+  }
+}
+
+/* ========================================
+   MAIN CONTENT RESPONSIVE
+   ======================================== */
+
+/* Desktop - account for fixed sidebar */
+.user-main-content {
+  margin-left: 16rem; /* 256px */
+  min-height: 100vh;
+}
+
+/* Mobile - full width */
+@media (max-width: 768px) {
+  .user-main-content {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* ========================================
+   HEADER RESPONSIVE
+   ======================================== */
+
+.user-header {
+  padding: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .user-header {
+    padding: 1rem;
+  }
+  
+  .user-header h1 {
+    font-size: 1.5rem;
+  }
+  
+  .user-header p {
+    font-size: 0.875rem;
+  }
+}
+
+/* ========================================
+   MOBILE MENU BUTTON
+   ======================================== */
+
+.mobile-menu-btn {
+  display: none;
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 50;
+  background: black;
+  color: white;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: block;
+  }
+}
+
+/* ========================================
+   CARDS & CONTENT RESPONSIVE
+   ======================================== */
+
+/* Content container */
+.content-container {
+  max-width: 64rem; /* 1024px */
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .content-container {
+    padding: 1rem;
+  }
+}
+
+/* Cards spacing */
+.space-y-6 > * + * {
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .space-y-6 > * + * {
+    margin-top: 1rem;
+  }
+}
+
+/* Card padding responsive */
+.card-responsive {
+  padding: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .card-responsive {
+    padding: 1rem;
+  }
+}
+
+/* ========================================
+   GRID LAYOUTS RESPONSIVE
+   ======================================== */
+
+/* 2-column grid */
+.grid-cols-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .grid-cols-2 {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+}
+
+/* MD grid (desktop: 2 cols, mobile: 1 col) */
+.md\:grid-cols-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .md\:grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ========================================
+   PROFILE PICTURE RESPONSIVE
+   ======================================== */
+
+.profile-picture-lg {
+  width: 5rem;
+  height: 5rem;
+}
+
+.profile-picture-xl {
+  width: 6rem;
+  height: 6rem;
+}
+
+.profile-picture-2xl {
+  width: 8rem;
+  height: 8rem;
+}
+
+@media (max-width: 768px) {
+  .profile-picture-lg {
+    width: 4rem;
+    height: 4rem;
+  }
+  
+  .profile-picture-xl {
+    width: 5rem;
+    height: 5rem;
+  }
+  
+  .profile-picture-2xl {
+    width: 6rem;
+    height: 6rem;
+  }
+}
+
+/* ========================================
+   BARCODE SECTION RESPONSIVE
+   ======================================== */
+
+.barcode-container {
+  width: 16rem;
+  height: 16rem;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .barcode-container {
+    width: 12rem;
+    height: 12rem;
+  }
+}
+
+/* ========================================
+   BUTTONS RESPONSIVE
+   ======================================== */
+
+.btn-responsive {
+  padding: 1rem 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .btn-responsive {
+    padding: 0.875rem 1rem;
+    width: 100%;
+  }
+}
+
+/* Quick action buttons */
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .quick-actions-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+}
+
+/* ========================================
+   TEXT RESPONSIVE
+   ======================================== */
+
+@media (max-width: 768px) {
+  .text-2xl {
+    font-size: 1.5rem;
+  }
+  
+  .text-xl {
+    font-size: 1.25rem;
+  }
+  
+  .text-lg {
+    font-size: 1rem;
+  }
+  
+  .text-3xl {
+    font-size: 1.875rem;
+  }
+}
+
+/* ========================================
+   STATUS BADGES RESPONSIVE
+   ======================================== */
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 768px) {
+  .status-badge {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* ========================================
+   SETTINGS FORM RESPONSIVE
+   ======================================== */
+
+.settings-form-group {
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .settings-form-group {
+    margin-bottom: 1rem;
+  }
+}
+
+.settings-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 16px;
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: #000;
+}
+
+/* ========================================
+   NOTIFICATION TOGGLES RESPONSIVE
+   ======================================== */
+
+.notification-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+}
+
+@media (max-width: 768px) {
+  .notification-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .notification-item .toggle-wrapper {
+    margin-left: 0;
+    align-self: flex-end;
+  }
+}
+
+/* ========================================
+   CHECK-IN STATUS CARDS RESPONSIVE
+   ======================================== */
+
+.status-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .status-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========================================
+   ANIMATIONS
+   ======================================== */
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+
+/* Hide on mobile */
+@media (max-width: 768px) {
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+/* Show only on mobile */
+.show-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .show-mobile {
+    display: block;
+  }
+}
+
+/* Responsive spacing */
+.responsive-spacing {
+  padding: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .responsive-spacing {
+    padding: 1rem;
+  }
+}
+
+/* ========================================
+   SCROLLBAR STYLING (Optional)
+   ======================================== */
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
