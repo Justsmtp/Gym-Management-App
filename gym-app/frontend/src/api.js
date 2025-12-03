@@ -1,16 +1,18 @@
 import axios from 'axios';
 
-const API = axios.create({
-  baseURL: 'http://localhost:5000/api'
+// Use the deployed backend URL from environment variable
+const API_BASE = process.env.REACT_APP_API_URL || 'https://gym-management-app-backend-sevs.onrender.com';
+
+const api = axios.create({
+  baseURL: API_BASE + '/api',
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// Add token to requests
-API.interceptors.request.use((req) => {
+// Attach token if available
+api.interceptors.request.use((cfg) => {
   const token = localStorage.getItem('token');
-  if (token) {
-    req.headers['x-auth-token'] = token;
-  }
-  return req;
+  if (token) cfg.headers['x-auth-token'] = token;
+  return cfg;
 });
 
-export default API;
+export default api;
