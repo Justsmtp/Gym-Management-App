@@ -9,7 +9,7 @@ const { startReminderScheduler } = require('./services/reminderScheduler');
 const app = express();
 
 // CORS - allow your Vercel frontend
-const FRONTEND = process.env.FRONTEND_URL || 'http://localhost:3000';
+const FRONTEND = process.env.FRONTEND_URL || 'https://gym-management-app-fdp4-gx4twroly-justsmtps-projects.vercel.app/';
 app.use(cors({ origin: FRONTEND, credentials: true }));
 
 // Body parsers
