@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// frontend/src/components/User/PaymentScreen.jsx
+import React, { useState, useEffect } from 'react';
 import { CheckCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { paystackConfig, membershipPlans } from '../../config/paystack';
@@ -8,28 +9,75 @@ const PaymentScreen = () => {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState('paystack');
   const [selectedPlan, setSelectedPlan] = useState('deluxe');
+  const [addTrainer, setAddTrainer] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null); // Added for Paystack error handling
+  const [error, setError] = useState(null);
+  const [paystackLoaded, setPaystackLoaded] = useState(false);
 
-  const { currentUser, handlePayment, setCurrentScreen } = useApp();
+  const { currentUser, setCurrentScreen } = useApp();
+
+  // Check if Paystack script is loaded
+  useEffect(() => {
+    const checkPaystack = () => {
+      if (typeof window.PaystackPop !== 'undefined') {
+        console.log('✅ Paystack script loaded successfully');
+        setPaystackLoaded(true);
+      } else {
+        console.error('❌ Paystack script not found');
+        setError('Paystack is not loaded. Please refresh the page.');
+      }
+    };
+
+    checkPaystack();
+    const timer = setTimeout(checkPaystack, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const currentPlan = membershipPlans[selectedPlan];
+  const TRAINER_FEE = 1000000; // ₦10,000 in kobo
+  const totalAmount = currentPlan.amount + (addTrainer ? TRAINER_FEE : 0);
 
-  // Paystack payment handler with error safety
+  const formatAmount = (kobo) => (kobo / 100).toLocaleString();
+
+  // Paystack payment handler - FIXED VERSION
   const handlePaystackPayment = () => {
+    console.log('🔍 Starting Paystack payment...');
+    setError(null);
+
     try {
-      // Check if Paystack script is loaded
+      // Validation checks
       if (typeof window.PaystackPop === 'undefined') {
-        setError('Paystack is not loaded. Please refresh the page.');
+        setError('Paystack not loaded. Please refresh the page.');
         return;
       }
 
+      if (!currentUser || !currentUser.email) {
+        setError('User information missing. Please logout and login again.');
+        return;
+      }
+
+      if (!totalAmount || totalAmount <= 0) {
+        setError('Invalid payment amount.');
+        return;
+      }
+
+      console.log('✅ Validation passed');
+      console.log('📊 Payment details:', {
+        email: currentUser.email,
+        amount: totalAmount,
+        plan: currentPlan.name,
+        trainer: addTrainer,
+      });
+
+      const paymentRef = `GYM-${currentUser.id || currentUser._id}-${Date.now()}`;
+
+      // Initialize Paystack - FIXED: Using arrow functions, not async
       const handler = window.PaystackPop.setup({
         key: paystackConfig.publicKey,
-        email: currentUser?.email || 'user@example.com',
-        amount: currentPlan.amount, // in kobo
-        currency: paystackConfig.currency,
-        ref: `GYM-${currentUser?.id}-${new Date().getTime()}`,
+        email: currentUser.email,
+        amount: totalAmount,
+        currency: 'NGN',
+        ref: paymentRef,
         metadata: {
           custom_fields: [
             {
@@ -42,63 +90,75 @@ const PaymentScreen = () => {
               variable_name: 'duration',
               value: `${currentPlan.duration} days`,
             },
+            {
+              display_name: 'Trainer Add-on',
+              variable_name: 'trainer_addon',
+              value: addTrainer ? 'Yes' : 'No',
+            },
           ],
         },
-        callback: async function (response) {
-          console.log('Payment successful:', response);
+        callback: (response) => {
+          console.log('✅ Payment successful:', response);
           setLoading(true);
-          try {
-            const verify = await API.post('/payments/verify', {
-              reference: response.reference,
-              membershipType: currentPlan.name,
-              amount: currentPlan.amount,
-              duration: currentPlan.duration,
-            });
-            console.log('Verification response:', verify.data);
-            handlePayment(currentPlan.duration);
-            setPaymentSuccess(true);
-          } catch (error) {
-            console.error('Payment verification error:', error);
-            alert(
-              'Payment successful but verification failed. Please contact support with reference: ' +
+
+          // Verify payment with backend
+          API.post('/payments/verify', {
+            reference: response.reference,
+            membershipType: currentPlan.name,
+            amount: totalAmount,
+            duration: currentPlan.duration,
+            trainerAddon: addTrainer,
+          })
+            .then((verify) => {
+              console.log('✅ Verification successful:', verify.data);
+              setPaymentSuccess(true);
+              setLoading(false);
+            })
+            .catch((error) => {
+              console.error('❌ Verification error:', error);
+              setLoading(false);
+              alert(
+                '⚠️ Payment successful but verification failed.\n\n' +
+                'Please contact support with reference:\n' +
                 response.reference
-            );
-          } finally {
-            setLoading(false);
-          }
+              );
+            });
         },
-        onClose: function () {
-          alert('Payment window closed.');
+        onClose: () => {
+          console.log('ℹ️ Payment window closed');
+          alert('Payment cancelled. Click "Pay" to try again.');
         },
       });
+
+      console.log('🚀 Opening Paystack window...');
       handler.openIframe();
+
     } catch (err) {
-      console.error('Paystack initialization error:', err);
-      setError('Failed to initialize payment. Please try again.');
+      console.error('❌ Paystack error:', err);
+      setError('Failed to initialize payment: ' + err.message);
     }
   };
 
-  // Handle cash payment
-  const handleCashPayment = async () => {
+  // Cash payment handler
+  const handleCashPayment = () => {
     setLoading(true);
-    try {
-      await API.post('/payments', {
-        amount: currentPlan.amount / 100,
-        membershipType: currentPlan.name,
-        paymentMethod: 'Cash',
-        duration: currentPlan.duration,
+    API.post('/payments', {
+      amount: totalAmount / 100,
+      membershipType: currentPlan.name,
+      paymentMethod: 'Cash',
+      duration: currentPlan.duration,
+      trainerAddon: addTrainer,
+    })
+      .then(() => {
+        setPaymentSuccess(true);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error('Cash payment error:', error);
+        alert('Failed to record payment. Please try again.');
+        setLoading(false);
       });
-      handlePayment(currentPlan.duration);
-      setPaymentSuccess(true);
-    } catch (error) {
-      console.error('Cash payment error:', error);
-      alert('Failed to record payment. Please try again.');
-    } finally {
-      setLoading(false);
-    }
   };
-
-  const formatAmount = (kobo) => (kobo / 100).toLocaleString();
 
   // Success Screen
   if (paymentSuccess) {
@@ -108,10 +168,12 @@ const PaymentScreen = () => {
         <h2 className="text-3xl font-bold text-black mb-4">Payment Successful!</h2>
         <p className="text-gray-600 mb-2">Your {currentPlan.name} has been activated</p>
         <p className="text-sm text-gray-500 mb-2">Duration: {currentPlan.duration} days</p>
-        <p className="text-sm text-gray-500 mb-8">Next due date: {currentUser?.nextDueDate}</p>
+        {addTrainer && (
+          <p className="text-sm text-green-600 font-semibold mb-2">✓ Personal Trainer included</p>
+        )}
         <button
           onClick={() => setCurrentScreen('userDashboard')}
-          className="bg-black text-white py-3 px-8 rounded-full font-semibold hover:bg-gray-800 transition"
+          className="mt-6 bg-black text-white py-3 px-8 rounded-full font-semibold hover:bg-gray-800 transition"
         >
           Back to Dashboard
         </button>
@@ -124,13 +186,14 @@ const PaymentScreen = () => {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-black mb-4"></div>
-        <p className="text-lg text-gray-600">Processing your payment...</p>
+        <p className="text-lg text-gray-600">Processing payment...</p>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header */}
       <div className="bg-black text-white p-6">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <button
@@ -149,13 +212,23 @@ const PaymentScreen = () => {
         {error && (
           <div className="mb-4 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
             <p className="text-sm text-red-800 font-semibold">⚠️ Payment Error:</p>
-            <p className="text-xs text-red-700">{error}</p>
+            <p className="text-xs text-red-700 mt-1">{error}</p>
             <button
               onClick={() => setError(null)}
               className="mt-2 text-xs text-red-600 underline"
             >
               Dismiss
             </button>
+          </div>
+        )}
+
+        {/* Paystack Loading Warning */}
+        {!paystackLoaded && (
+          <div className="mb-4 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
+            <p className="text-sm text-yellow-800 font-semibold">⚠️ Loading payment system...</p>
+            <p className="text-xs text-yellow-700 mt-1">
+              Please wait. If this persists, refresh the page.
+            </p>
           </div>
         )}
 
@@ -168,58 +241,77 @@ const PaymentScreen = () => {
               <button
                 key={key}
                 onClick={() => setSelectedPlan(key)}
-                className={`border-2 rounded-xl p-4 text-left transition relative ${
+                className={`border-2 rounded-xl p-4 text-left transition ${
                   selectedPlan === key
                     ? 'border-black bg-gray-50 shadow-md'
                     : 'border-gray-300 hover:border-black'
                 }`}
               >
-                {membershipPlans[key].highlight && (
-                  <div
-                    className={`absolute top-2 right-2 text-white text-xs px-2 py-1 rounded-full font-semibold ${
-                      membershipPlans[key].highlightColor || 'bg-green-500'
-                    }`}
-                  >
-                    {membershipPlans[key].highlight}
-                  </div>
-                )}
                 <div className="flex justify-between items-start mb-2">
                   <span className="font-bold text-sm">{membershipPlans[key].name}</span>
-                  {selectedPlan === key && (
-                    <CheckCircle size={20} className="text-black" />
-                  )}
+                  {selectedPlan === key && <CheckCircle size={20} className="text-black" />}
                 </div>
                 <p className="text-2xl font-bold text-black mb-1">
                   ₦{formatAmount(membershipPlans[key].amount)}
                 </p>
                 <p className="text-xs text-gray-600 mb-2">
-                  {membershipPlans[key].duration} Days Access
+                  {membershipPlans[key].duration} Days
                 </p>
-                <div className="text-xs text-gray-500">
-                  {membershipPlans[key].description}
-                </div>
+                <p className="text-xs text-gray-500">{membershipPlans[key].description}</p>
               </button>
             ))}
           </div>
 
+          {/* Trainer Add-on */}
+          <div className="mt-6 p-4 bg-purple-50 border-2 border-purple-200 rounded-xl">
+            <label className="flex items-start space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={addTrainer}
+                onChange={(e) => setAddTrainer(e.target.checked)}
+                className="mt-1 w-5 h-5 accent-black cursor-pointer"
+              />
+              <div className="flex-1">
+                <div className="font-bold text-black mb-1">
+                  Add Personal Trainer (+₦10,000)
+                </div>
+                <p className="text-xs text-gray-600">
+                  Personalized workout plans and one-on-one guidance.
+                </p>
+              </div>
+            </label>
+          </div>
+
           {/* Summary */}
           <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center mb-2">
               <div>
                 <p className="text-sm text-gray-600">Selected Plan:</p>
                 <p className="text-lg font-bold text-black">{currentPlan.name}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-gray-600">Total Amount:</p>
-                <p className="text-2xl font-bold text-black">
+                <p className="text-sm text-gray-600">Plan Price:</p>
+                <p className="text-xl font-bold text-black">
                   ₦{formatAmount(currentPlan.amount)}
                 </p>
               </div>
             </div>
+            {addTrainer && (
+              <div className="flex justify-between items-center border-t pt-2 mb-2">
+                <p className="text-sm text-gray-600">Trainer Add-on:</p>
+                <p className="text-lg font-bold text-black">₦10,000</p>
+              </div>
+            )}
+            <div className="flex justify-between items-center border-t-2 border-blue-300 pt-3">
+              <p className="text-base font-semibold text-gray-700">Total:</p>
+              <p className="text-3xl font-bold text-black">
+                ₦{formatAmount(totalAmount)}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/*Payment Method */}
+        {/* Payment Method */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200 mb-6">
           <h3 className="text-xl font-bold text-black mb-4">Payment Method</h3>
           <div className="space-y-3">
@@ -234,9 +326,7 @@ const PaymentScreen = () => {
               <div className="flex justify-between items-center">
                 <div>
                   <div className="font-semibold">Paystack</div>
-                  <div className="text-sm text-gray-500">
-                    Pay with card, bank transfer, or USSD
-                  </div>
+                  <div className="text-sm text-gray-500">Card, bank transfer, USSD</div>
                 </div>
                 {selectedMethod === 'paystack' && (
                   <CheckCircle size={24} className="text-black" />
@@ -255,9 +345,7 @@ const PaymentScreen = () => {
               <div className="flex justify-between items-center">
                 <div>
                   <div className="font-semibold">Pay at Gym</div>
-                  <div className="text-sm text-gray-500">
-                    Pay cash at the gym reception
-                  </div>
+                  <div className="text-sm text-gray-500">Cash at reception</div>
                 </div>
                 {selectedMethod === 'cash' && (
                   <CheckCircle size={24} className="text-black" />
@@ -267,21 +355,17 @@ const PaymentScreen = () => {
           </div>
         </div>
 
-        {/*Pay Button */}
+        {/* Pay Button */}
         <button
-          onClick={
-            selectedMethod === 'paystack'
-              ? handlePaystackPayment
-              : handleCashPayment
-          }
-          disabled={loading}
+          onClick={selectedMethod === 'paystack' ? handlePaystackPayment : handleCashPayment}
+          disabled={loading || (selectedMethod === 'paystack' && !paystackLoaded)}
           className="w-full bg-black text-white py-4 px-6 rounded-full font-semibold hover:bg-gray-800 transition shadow-lg text-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
           {loading
             ? 'Processing...'
             : selectedMethod === 'paystack'
-            ? `Pay ₦${formatAmount(currentPlan.amount)} with Paystack`
-            : `Confirm Cash Payment - ₦${formatAmount(currentPlan.amount)}`}
+            ? `Pay ₦${formatAmount(totalAmount)} with Paystack`
+            : `Confirm Cash Payment - ₦${formatAmount(totalAmount)}`}
         </button>
 
         {selectedMethod === 'paystack' && (
