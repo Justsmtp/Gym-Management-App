@@ -2,7 +2,7 @@ import React from 'react';
 import { Home, Calendar, CreditCard, User, Settings, LogOut, QrCode } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
-const UserSidebar = ({ activeTab, setActiveTab }) => {
+const UserSidebar = ({ activeTab, setActiveTab, isSidebarOpen, setIsSidebarOpen }) => {
   const { handleSignOut } = useApp();
 
   const navItems = [
@@ -14,8 +14,16 @@ const UserSidebar = ({ activeTab, setActiveTab }) => {
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
+  const handleTabClick = (tabId) => {
+    setActiveTab(tabId);
+    // Close sidebar on mobile after selection
+    if (setIsSidebarOpen) {
+      setIsSidebarOpen(false);
+    }
+  };
+
   return (
-    <div className="w-64 bg-black text-white h-screen flex flex-col overflow-y-auto">
+    <div className="w-64 bg-black text-white fixed left-0 top-0 bottom-0 flex flex-col overflow-y-auto">
       <div className="p-4 md:p-6 flex-1">
         {/* Logo Section */}
         <div className="flex items-center gap-3 mb-6 md:mb-8">
@@ -35,7 +43,7 @@ const UserSidebar = ({ activeTab, setActiveTab }) => {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => handleTabClick(item.id)}
                 className={`w-full flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg transition ${
                   activeTab === item.id ? 'bg-white text-black' : 'hover:bg-gray-800'
                 }`}
@@ -49,7 +57,7 @@ const UserSidebar = ({ activeTab, setActiveTab }) => {
       </div>
 
       {/* Sign Out Button */}
-      <div className="p-4 md:p-6 border-t border-gray-800">
+      <div className="p-4 md:p-6 border-t border-gray-800 mt-auto">
         <button
           onClick={handleSignOut}
           className="w-full flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg hover:bg-gray-800 transition"
