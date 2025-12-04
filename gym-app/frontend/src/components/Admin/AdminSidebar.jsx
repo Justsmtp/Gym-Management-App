@@ -2,85 +2,67 @@ import React from 'react';
 import { BarChart3, Users, DollarSign, Clock, Settings, LogOut } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
-const AdminSidebar = ({ activeTab, setActiveTab }) => {
+const AdminSidebar = ({ activeTab, setActiveTab, isSidebarOpen, setIsSidebarOpen }) => {
   const { handleSignOut } = useApp();
 
+  const navItems = [
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'payments', label: 'Payments', icon: DollarSign },
+    { id: 'attendance', label: 'Attendance', icon: Clock },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ];
+
+  const handleTabClick = (tabId) => {
+    setActiveTab(tabId);
+    // Close sidebar on mobile after selection
+    if (setIsSidebarOpen) {
+      setIsSidebarOpen(false);
+    }
+  };
+
   return (
-    <div className="w-64 bg-black text-white h-screen flex flex-col fixed left-0 top-0">
-      <div className="p-6 flex-1">
+    <div className="w-64 bg-black text-white fixed left-0 top-0 bottom-0 flex flex-col overflow-y-auto">
+      <div className="p-4 md:p-6 flex-1">
         {/* Logo Section */}
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-            <span className="text-black font-bold text-xl">1st</span>
+        <div className="flex items-center gap-3 mb-6 md:mb-8">
+          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center flex-shrink-0">
+            <span className="text-black font-bold text-lg md:text-xl">1st</span>
           </div>
           <div>
-            <h1 className="text-lg font-bold">1st Impression</h1>
+            <h1 className="text-base md:text-lg font-bold">1st Impression</h1>
             <p className="text-xs text-gray-400">Admin Panel</p>
           </div>
         </div>
 
         {/* Navigation Links */}
-        <nav className="space-y-2">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
-              activeTab === 'overview' ? 'bg-white text-black' : 'hover:bg-gray-800'
-            }`}
-          >
-            <BarChart3 size={20} />
-            <span className="font-semibold">Overview</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
-              activeTab === 'users' ? 'bg-white text-black' : 'hover:bg-gray-800'
-            }`}
-          >
-            <Users size={20} />
-            <span className="font-semibold">Users</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('payments')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
-              activeTab === 'payments' ? 'bg-white text-black' : 'hover:bg-gray-800'
-            }`}
-          >
-            <DollarSign size={20} />
-            <span className="font-semibold">Payments</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('attendance')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
-              activeTab === 'attendance' ? 'bg-white text-black' : 'hover:bg-gray-800'
-            }`}
-          >
-            <Clock size={20} />
-            <span className="font-semibold">Attendance</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
-              activeTab === 'settings' ? 'bg-white text-black' : 'hover:bg-gray-800'
-            }`}
-          >
-            <Settings size={20} />
-            <span className="font-semibold">Settings</span>
-          </button>
+        <nav className="space-y-1 md:space-y-2">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleTabClick(item.id)}
+                className={`w-full flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg transition ${
+                  activeTab === item.id ? 'bg-white text-black' : 'hover:bg-gray-800'
+                }`}
+              >
+                <Icon size={18} className="md:w-5 md:h-5 flex-shrink-0" />
+                <span className="font-semibold text-sm md:text-base">{item.label}</span>
+              </button>
+            );
+          })}
         </nav>
       </div>
 
       {/* Sign Out Button */}
-      <div className="p-6 border-t border-gray-800">
+      <div className="p-4 md:p-6 border-t border-gray-800 mt-auto">
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-800 transition"
+          className="w-full flex items-center gap-3 px-3 md:px-4 py-2.5 md:py-3 rounded-lg hover:bg-gray-800 transition"
         >
-          <LogOut size={20} />
-          <span className="font-semibold">Sign Out</span>
+          <LogOut size={18} className="md:w-5 md:h-5 flex-shrink-0" />
+          <span className="font-semibold text-sm md:text-base">Sign Out</span>
         </button>
       </div>
     </div>
