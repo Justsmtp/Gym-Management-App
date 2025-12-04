@@ -1,4 +1,4 @@
-// frontend/src/components/Admin/SettingsPanel.jsx
+// frontend/src/components/Admin/AdminSettingsPanel.jsx
 import React, { useState } from 'react';
 import { Settings, DollarSign, Bell, Mail, Save, Edit2, Check, X } from 'lucide-react';
 
@@ -6,7 +6,6 @@ const AdminSettingsPanel = () => {
   const [message, setMessage] = useState(null);
   const [editingPlan, setEditingPlan] = useState(null);
 
-  // Membership Plans (with real backend integration potential)
   const [plans, setPlans] = useState([
     {
       id: 1,
@@ -42,7 +41,6 @@ const AdminSettingsPanel = () => {
     },
   ]);
 
-  // Notification Settings
   const [notificationSettings, setNotificationSettings] = useState({
     emailReminders: true,
     reminderDaysBefore: 7,
@@ -51,7 +49,6 @@ const AdminSettingsPanel = () => {
     dailySummary: false,
   });
 
-  // Email Configuration
   const [emailConfig, setEmailConfig] = useState({
     fromName: '1st Impression Fitness Center',
     fromEmail: process.env.REACT_APP_EMAIL_USER || 'gym@example.com',
@@ -66,9 +63,6 @@ const AdminSettingsPanel = () => {
     setPlans(plans.map(p => p.id === editingPlan.id ? editingPlan : p));
     setEditingPlan(null);
     setMessage({ type: 'success', text: 'Plan updated successfully!' });
-    
-    // In production, save to backend:
-    // await API.put(`/admin/plans/${editingPlan.id}`, editingPlan);
   };
 
   const handlePlanCancel = () => {
@@ -78,111 +72,105 @@ const AdminSettingsPanel = () => {
   const handleNotificationToggle = (key) => {
     setNotificationSettings(prev => ({ ...prev, [key]: !prev[key] }));
     setMessage({ type: 'success', text: 'Setting updated!' });
-    
-    // In production, save to backend:
-    // await API.put('/admin/settings/notifications', notificationSettings);
   };
 
   const handleEmailConfigSave = () => {
     setMessage({ type: 'success', text: 'Email configuration saved!' });
-    
-    // In production, save to backend:
-    // await API.put('/admin/settings/email', emailConfig);
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
       {/* Message Banner */}
       {message && (
-        <div className={`p-4 rounded-xl border-2 ${
+        <div className={`p-3 md:p-4 rounded-xl border-2 ${
           message.type === 'success' 
             ? 'bg-green-50 border-green-200' 
             : 'bg-red-50 border-red-200'
         }`}>
           <div className="flex justify-between items-center">
-            <p className={`font-semibold ${
+            <p className={`text-sm md:text-base font-semibold ${
               message.type === 'success' ? 'text-green-800' : 'text-red-800'
             }`}>
               {message.type === 'success' ? '✅' : '❌'} {message.text}
             </p>
-            <button onClick={() => setMessage(null)} className="text-gray-600">✕</button>
+            <button onClick={() => setMessage(null)} className="text-gray-600 text-lg">✕</button>
           </div>
         </div>
       )}
 
       {/* Membership Plans Management */}
-      <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200">
-        <div className="flex items-center mb-6">
-          <DollarSign className="mr-3" size={24} />
-          <h3 className="text-xl font-bold text-black">Membership Plans</h3>
+      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
+        <div className="flex items-center mb-4 md:mb-6">
+          <DollarSign className="mr-2 md:mr-3" size={20} />
+          <h3 className="text-lg md:text-xl font-bold text-black">Membership Plans</h3>
         </div>
 
         <div className="space-y-3">
           {plans.map((plan) => (
             <div
               key={plan.id}
-              className="border-2 border-gray-200 rounded-lg p-4 hover:shadow-md transition"
+              className="border-2 border-gray-200 rounded-lg p-3 md:p-4 hover:shadow-md transition"
             >
               {editingPlan?.id === plan.id ? (
                 // Edit Mode
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                         Display Name
                       </label>
                       <input
                         type="text"
                         value={editingPlan.displayName}
                         onChange={(e) => setEditingPlan({ ...editingPlan, displayName: e.target.value })}
-                        className="w-full p-2 border-2 border-gray-300 rounded focus:border-black focus:outline-none"
+                        className="w-full p-2 border-2 border-gray-300 rounded focus:border-black focus:outline-none text-sm md:text-base"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                         Price (₦)
                       </label>
                       <input
                         type="number"
                         value={editingPlan.price}
                         onChange={(e) => setEditingPlan({ ...editingPlan, price: Number(e.target.value) })}
-                        className="w-full p-2 border-2 border-gray-300 rounded focus:border-black focus:outline-none"
+                        className="w-full p-2 border-2 border-gray-300 rounded focus:border-black focus:outline-none text-sm md:text-base"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                       Duration (days)
                     </label>
                     <input
                       type="number"
                       value={editingPlan.duration}
                       onChange={(e) => setEditingPlan({ ...editingPlan, duration: Number(e.target.value) })}
-                      className="w-full p-2 border-2 border-gray-300 rounded focus:border-black focus:outline-none"
+                      className="w-full p-2 border-2 border-gray-300 rounded focus:border-black focus:outline-none text-sm md:text-base"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                       Description
                     </label>
                     <textarea
                       value={editingPlan.description}
                       onChange={(e) => setEditingPlan({ ...editingPlan, description: e.target.value })}
-                      className="w-full p-2 border-2 border-gray-300 rounded focus:border-black focus:outline-none"
+                      className="w-full p-2 border-2 border-gray-300 rounded focus:border-black focus:outline-none text-sm md:text-base"
                       rows={2}
                     />
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <button
                       onClick={handlePlanSave}
-                      className="flex-1 bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition"
+                      className="flex-1 bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition text-sm md:text-base"
                     >
                       <Check className="inline mr-2" size={16} />
                       Save
                     </button>
                     <button
                       onClick={handlePlanCancel}
-                      className="flex-1 bg-gray-500 text-white py-2 rounded-lg font-semibold hover:bg-gray-600 transition"
+                      className="flex-1 bg-gray-500 text-white py-2 rounded-lg font-semibold hover:bg-gray-600 transition text-sm md:text-base"
                     >
                       <X className="inline mr-2" size={16} />
                       Cancel
@@ -194,22 +182,22 @@ const AdminSettingsPanel = () => {
                 <>
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <p className="font-bold text-black text-lg">{plan.displayName}</p>
+                      <p className="font-bold text-black text-base md:text-lg">{plan.displayName}</p>
                       <p className="text-xs text-gray-500">Code: {plan.name}</p>
                     </div>
                     <button
                       onClick={() => handlePlanEdit(plan)}
-                      className="text-black hover:text-gray-700 transition"
+                      className="text-black hover:text-gray-700 transition p-2"
                     >
-                      <Edit2 size={18} />
+                      <Edit2 size={16} className="md:w-5 md:h-5" />
                     </button>
                   </div>
-                  <p className="text-3xl font-bold text-black mb-2">
+                  <p className="text-2xl md:text-3xl font-bold text-black mb-2">
                     ₦{plan.price.toLocaleString()}
                   </p>
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm text-gray-600">{plan.description}</p>
-                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <p className="text-xs md:text-sm text-gray-600">{plan.description}</p>
+                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold whitespace-nowrap">
                       {plan.duration} days
                     </span>
                   </div>
@@ -221,13 +209,13 @@ const AdminSettingsPanel = () => {
       </div>
 
       {/* Notification Settings */}
-      <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200">
-        <div className="flex items-center mb-6">
-          <Bell className="mr-3" size={24} />
-          <h3 className="text-xl font-bold text-black">Notification Settings</h3>
+      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
+        <div className="flex items-center mb-4 md:mb-6">
+          <Bell className="mr-2 md:mr-3" size={20} />
+          <h3 className="text-lg md:text-xl font-bold text-black">Notification Settings</h3>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3 md:space-y-4">
           {[
             {
               key: 'emailReminders',
@@ -252,13 +240,13 @@ const AdminSettingsPanel = () => {
           ].map((item, index) => (
             <div
               key={item.key}
-              className={`flex justify-between items-center py-3 ${
+              className={`flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 py-3 ${
                 index !== 3 ? 'border-b border-gray-200' : ''
               }`}
             >
-              <div>
-                <p className="font-semibold text-black">{item.title}</p>
-                <p className="text-sm text-gray-600">{item.desc}</p>
+              <div className="flex-1">
+                <p className="font-semibold text-black text-sm md:text-base">{item.title}</p>
+                <p className="text-xs md:text-sm text-gray-600">{item.desc}</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -273,8 +261,8 @@ const AdminSettingsPanel = () => {
           ))}
 
           {/* Reminder Days Configuration */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="mt-4 md:mt-6 p-3 md:p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
               Send reminders how many days before due date?
             </label>
             <select
@@ -283,7 +271,7 @@ const AdminSettingsPanel = () => {
                 ...notificationSettings, 
                 reminderDaysBefore: Number(e.target.value) 
               })}
-              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+              className="w-full p-2 md:p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm md:text-base"
             >
               <option value={3}>3 days before</option>
               <option value={5}>5 days before</option>
@@ -296,55 +284,55 @@ const AdminSettingsPanel = () => {
       </div>
 
       {/* Email Configuration */}
-      <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200">
-        <div className="flex items-center mb-6">
-          <Mail className="mr-3" size={24} />
-          <h3 className="text-xl font-bold text-black">Email Configuration</h3>
+      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
+        <div className="flex items-center mb-4 md:mb-6">
+          <Mail className="mr-2 md:mr-3" size={20} />
+          <h3 className="text-lg md:text-xl font-bold text-black">Email Configuration</h3>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3 md:space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
               From Name
             </label>
             <input
               type="text"
               value={emailConfig.fromName}
               onChange={(e) => setEmailConfig({ ...emailConfig, fromName: e.target.value })}
-              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+              className="w-full p-2 md:p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm md:text-base"
               placeholder="1st Impression Fitness Center"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
               From Email
             </label>
             <input
               type="email"
               value={emailConfig.fromEmail}
               onChange={(e) => setEmailConfig({ ...emailConfig, fromEmail: e.target.value })}
-              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+              className="w-full p-2 md:p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm md:text-base"
               placeholder="gym@example.com"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-2">
               Reply-To Email
             </label>
             <input
               type="email"
               value={emailConfig.replyTo}
               onChange={(e) => setEmailConfig({ ...emailConfig, replyTo: e.target.value })}
-              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+              className="w-full p-2 md:p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm md:text-base"
               placeholder="support@1stimpression.com"
             />
           </div>
 
           <button
             onClick={handleEmailConfigSave}
-            className="w-full bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition"
+            className="w-full bg-black text-white py-2.5 md:py-3 rounded-lg font-semibold hover:bg-gray-800 transition text-sm md:text-base"
           >
             <Save className="inline mr-2" size={16} />
             Save Email Configuration
@@ -353,28 +341,28 @@ const AdminSettingsPanel = () => {
       </div>
 
       {/* System Information */}
-      <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200">
-        <div className="flex items-center mb-6">
-          <Settings className="mr-3" size={24} />
-          <h3 className="text-xl font-bold text-black">System Information</h3>
+      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
+        <div className="flex items-center mb-4 md:mb-6">
+          <Settings className="mr-2 md:mr-3" size={20} />
+          <h3 className="text-lg md:text-xl font-bold text-black">System Information</h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">System Version</p>
-            <p className="font-bold text-black">v1.0.0</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+          <div className="p-3 md:p-4 bg-gray-50 rounded-lg">
+            <p className="text-xs md:text-sm text-gray-600 mb-1">System Version</p>
+            <p className="font-bold text-black text-sm md:text-base">v1.0.0</p>
           </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">Email Scheduler</p>
-            <p className="font-bold text-green-600">Active (9:00 AM daily)</p>
+          <div className="p-3 md:p-4 bg-gray-50 rounded-lg">
+            <p className="text-xs md:text-sm text-gray-600 mb-1">Email Scheduler</p>
+            <p className="font-bold text-green-600 text-sm md:text-base">Active (9:00 AM daily)</p>
           </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">Database Status</p>
-            <p className="font-bold text-green-600">Connected</p>
+          <div className="p-3 md:p-4 bg-gray-50 rounded-lg">
+            <p className="text-xs md:text-sm text-gray-600 mb-1">Database Status</p>
+            <p className="font-bold text-green-600 text-sm md:text-base">Connected</p>
           </div>
-          <div className="p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">Last Backup</p>
-            <p className="font-bold text-black">{new Date().toLocaleDateString()}</p>
+          <div className="p-3 md:p-4 bg-gray-50 rounded-lg">
+            <p className="text-xs md:text-sm text-gray-600 mb-1">Last Backup</p>
+            <p className="font-bold text-black text-sm md:text-base">{new Date().toLocaleDateString()}</p>
           </div>
         </div>
       </div>
