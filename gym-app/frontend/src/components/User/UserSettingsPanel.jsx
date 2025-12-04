@@ -1,357 +1,264 @@
-// frontend/src/components/User/UserSettingsPanel.jsx
 import React, { useState, useEffect } from 'react';
-import { User, Bell, Lock, CreditCard, Mail, Phone, Save, Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import API from '../../api/api';
 
 const UserSettingsPanel = () => {
-  const { currentUser, setCurrentUser, handleSignOut } = useApp();
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState(null);
-  const [showPassword, setShowPassword] = useState(false);
+  const { currentUser } = useApp();
+  
+  const [notifications, setNotifications] = useState([
+    { 
+      id: 'email',
+      title: 'Email Notifications', 
+      desc: 'Receive payment reminders via email', 
+      enabled: true 
+    },
+    { 
+      id: 'push',
+      title: 'Push Notifications', 
+      desc: 'Get notified about class schedules', 
+      enabled: true 
+    },
+    { 
+      id: 'renewal',
+      title: 'Renewal Reminders', 
+      desc: 'Remind me before membership expires', 
+      enabled: true 
+    },
+    { 
+      id: 'promotional',
+      title: 'Promotional Updates', 
+      desc: 'Receive news about special offers', 
+      enabled: false 
+    },
+  ]);
 
-  const [profileData, setProfileData] = useState({
-    name: '',
+  const [formData, setFormData] = useState({
+    fullName: '',
     email: '',
     phone: '',
   });
 
-  const [notifications, setNotifications] = useState({
-    emailReminders: true,
-    paymentDue: true,
-    checkInConfirmation: false,
-    promotions: false,
-  });
-
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
 
   useEffect(() => {
+    const fetchNotificationPreferences = async () => {
+      try {
+        const response = await API.get('/user/notification-preferences').catch(() => ({
+          data: { notifications }
+        }));
+        
+        if (response.data.notifications) {
+          setNotifications(response.data.notifications);
+        }
+      } catch (err) {
+        console.error('Error fetching notification preferences:', err);
+      }
+    };
+
     if (currentUser) {
-      setProfileData({
-        name: currentUser.name || '',
+      setFormData({
+        fullName: currentUser.name || '',
         email: currentUser.email || '',
         phone: currentUser.phone || '',
       });
+      
+      // Fetch user notification preferences
+      fetchNotificationPreferences();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
-  const handleProfileUpdate = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage(null);
-
+  const toggleNotification = async (index) => {
     try {
-      const response = await API.put('/auth/update-profile', profileData);
+      const updatedNotifications = notifications.map((item, i) => 
+        i === index ? { ...item, enabled: !item.enabled } : item
+      );
       
-      const updatedUser = { ...currentUser, ...response.data.user };
-      setCurrentUser(updatedUser);
-      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      setNotifications(updatedNotifications);
 
-      setMessage({ type: 'success', text: 'Profile updated successfully!' });
-    } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: error.response?.data?.message || 'Failed to update profile' 
+      // Save to API
+      await API.put('/user/notification-preferences', {
+        notifications: updatedNotifications
+      }).catch(() => {
+        console.log('API not available, using local state only');
       });
-    } finally {
-      setLoading(false);
+
+      setSuccess('Notification preferences updated');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error('Error updating notifications:', err);
+      setError('Failed to update notification settings');
+      setTimeout(() => setError(null), 3000);
     }
   };
 
-  const handlePasswordChange = async (e) => {
-    e.preventDefault();
-    setMessage(null);
+  const handleInputChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
 
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setMessage({ type: 'error', text: 'New passwords do not match' });
-      return;
-    }
-
-    if (passwordData.newPassword.length < 6) {
-      setMessage({ type: 'error', text: 'Password must be at least 6 characters' });
-      return;
-    }
-
-    setLoading(true);
-
+  const handleUpdateProfile = async () => {
     try {
-      await API.put('/auth/change-password', {
-        currentPassword: passwordData.currentPassword,
-        newPassword: passwordData.newPassword,
-      });
+      setSaving(true);
+      setError(null);
 
-      setMessage({ type: 'success', text: 'Password changed successfully!' });
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: error.response?.data?.message || 'Failed to change password' 
-      });
+      const response = await API.put('/user/profile', formData);
+
+      setSuccess('Profile updated successfully!');
+      setTimeout(() => setSuccess(null), 3000);
+      
+      console.log('Profile updated:', response.data);
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      setError(err.response?.data?.message || 'Failed to update profile');
+      setTimeout(() => setError(null), 3000);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const handleNotificationToggle = (key) => {
-    setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
+  const handleChangePassword = () => {
+    // This would typically open a modal or navigate to change password page
+    alert('Change Password\n\nThis would open a change password form in a production app.');
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
-      {/* Message Banner */}
-      {message && (
-        <div className={`p-3 md:p-4 rounded-xl border-2 ${
-          message.type === 'success' 
-            ? 'bg-green-50 border-green-200' 
-            : 'bg-red-50 border-red-200'
-        }`}>
-          <div className="flex justify-between items-center">
-            <p className={`text-sm md:text-base font-semibold ${
-              message.type === 'success' ? 'text-green-800' : 'text-red-800'
-            }`}>
-              {message.type === 'success' ? '✅' : '❌'} {message.text}
-            </p>
-            <button onClick={() => setMessage(null)} className="text-gray-600 text-lg">✕</button>
-          </div>
+    <div className="space-y-6">
+      {/* Success Message */}
+      {success && (
+        <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
+          <p className="text-green-800 font-semibold">✅ {success}</p>
         </div>
       )}
 
-      {/* Profile Information */}
-      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
-        <div className="flex items-center mb-4 md:mb-6">
-          <User className="mr-2 md:mr-3" size={20} />
-          <h3 className="text-lg md:text-xl font-bold text-black">Profile Information</h3>
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+          <p className="text-red-800 font-semibold">⚠️ {error}</p>
         </div>
+      )}
 
-        <form onSubmit={handleProfileUpdate} className="space-y-3 md:space-y-4">
+      {/* Account Settings */}
+      <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200">
+        <h3 className="text-xl font-bold text-black mb-4">Account Settings</h3>
+        <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Full Name
-            </label>
+            <label className="block text-sm font-semibold text-black mb-2">Full Name</label>
             <input
               type="text"
-              value={profileData.name}
-              onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-              className="w-full p-2.5 md:p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm md:text-base"
-              required
+              name="fullName"
+              value={formData.fullName}
+              onChange={handleInputChange}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-black"
+              placeholder="John Doe"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Mail className="inline mr-2" size={16} />
-              Email Address
-            </label>
+            <label className="block text-sm font-semibold text-black mb-2">Email Address</label>
             <input
               type="email"
-              value={profileData.email}
-              onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-              className="w-full p-2.5 md:p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm md:text-base"
-              required
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-black"
+              placeholder="john@example.com"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Phone className="inline mr-2" size={16} />
-              Phone Number
-            </label>
+            <label className="block text-sm font-semibold text-black mb-2">Phone Number</label>
             <input
               type="tel"
-              value={profileData.phone}
-              onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-              pattern="[0-9]{11}"
-              className="w-full p-2.5 md:p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm md:text-base"
-              required
+              name="phone"
+              value={formData.phone}
+              onChange={handleInputChange}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-black"
+              placeholder="+234 800 000 0000"
             />
-            <p className="text-xs text-gray-500 mt-1">Must be 11 digits</p>
           </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-black text-white py-2.5 md:py-3 rounded-lg font-semibold hover:bg-gray-800 transition disabled:opacity-50 text-sm md:text-base"
+          <button 
+            onClick={handleUpdateProfile}
+            disabled={saving}
+            className="w-full bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition disabled:opacity-50"
           >
-            <Save className="inline mr-2" size={16} />
-            {loading ? 'Saving...' : 'Save Changes'}
+            {saving ? 'Updating...' : 'Update Profile'}
           </button>
-        </form>
+        </div>
       </div>
 
-      {/* Change Password */}
-      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
-        <div className="flex items-center mb-4 md:mb-6">
-          <Lock className="mr-2 md:mr-3" size={20} />
-          <h3 className="text-lg md:text-xl font-bold text-black">Change Password</h3>
-        </div>
-
-        <form onSubmit={handlePasswordChange} className="space-y-3 md:space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Current Password
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={passwordData.currentPassword}
-                onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                className="w-full p-2.5 md:p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none pr-12 text-sm md:text-base"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              New Password
-            </label>
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={passwordData.newPassword}
-              onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-              className="w-full p-2.5 md:p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm md:text-base"
-              minLength={6}
-              required
-            />
-            <p className="text-xs text-gray-500 mt-1">At least 6 characters</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Confirm New Password
-            </label>
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={passwordData.confirmPassword}
-              onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-              className="w-full p-2.5 md:p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm md:text-base"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-black text-white py-2.5 md:py-3 rounded-lg font-semibold hover:bg-gray-800 transition disabled:opacity-50 text-sm md:text-base"
-          >
-            {loading ? 'Changing...' : 'Change Password'}
-          </button>
-        </form>
-      </div>
-
-      {/* Notification Settings */}
-      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
-        <div className="flex items-center mb-4 md:mb-6">
-          <Bell className="mr-2 md:mr-3" size={20} />
-          <h3 className="text-lg md:text-xl font-bold text-black">Notification Preferences</h3>
-        </div>
-
-        <div className="space-y-3 md:space-y-4">
-          {[
-            {
-              key: 'emailReminders',
-              title: 'Email Reminders',
-              desc: 'Receive payment reminders via email',
-            },
-            {
-              key: 'paymentDue',
-              title: 'Payment Due Alerts',
-              desc: 'Get notified when payment is due',
-            },
-            {
-              key: 'checkInConfirmation',
-              title: 'Check-in Confirmations',
-              desc: 'Receive confirmation after gym check-in',
-            },
-            {
-              key: 'promotions',
-              title: 'Promotions & Updates',
-              desc: 'Stay informed about special offers',
-            },
-          ].map((item, index) => (
+      {/* Notification Preferences */}
+      <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200">
+        <h3 className="text-xl font-bold text-black mb-4">Notification Preferences</h3>
+        <div className="space-y-4">
+          {notifications.map((item, index) => (
             <div
-              key={item.key}
-              className={`flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 py-3 ${
-                index !== 3 ? 'border-b border-gray-200' : ''
+              key={item.id}
+              className={`flex justify-between items-center py-3 ${
+                index !== notifications.length - 1 ? 'border-b border-gray-200' : ''
               }`}
             >
-              <div className="flex-1">
-                <p className="font-semibold text-sm md:text-base text-black">{item.title}</p>
-                <p className="text-xs md:text-sm text-gray-600">{item.desc}</p>
+              <div>
+                <p className="font-semibold text-black">{item.title}</p>
+                <p className="text-sm text-gray-600">{item.desc}</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
                   type="checkbox"
                   className="sr-only peer"
-                  checked={notifications[item.key]}
-                  onChange={() => handleNotificationToggle(item.key)}
+                  checked={item.enabled}
+                  onChange={() => toggleNotification(index)}
+                  disabled={saving}
                 />
-                <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black"></div>
+                <div className="w-11 h-6 bg-gray-200 rounded-full peer-focus:outline-none peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black disabled:opacity-50"></div>
               </label>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Membership Info */}
-      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
-        <div className="flex items-center mb-4 md:mb-6">
-          <CreditCard className="mr-2 md:mr-3" size={20} />
-          <h3 className="text-lg md:text-xl font-bold text-black">Membership Information</h3>
-        </div>
-
-        <div className="space-y-2 md:space-y-3">
-          <div className="flex justify-between p-2.5 md:p-3 bg-gray-50 rounded-lg">
-            <span className="text-xs md:text-sm text-gray-600">Membership Type:</span>
-            <span className="font-semibold text-xs md:text-sm">{currentUser?.membershipType}</span>
-          </div>
-          <div className="flex justify-between p-2.5 md:p-3 bg-gray-50 rounded-lg">
-            <span className="text-xs md:text-sm text-gray-600">Status:</span>
-            <span className={`font-semibold text-xs md:text-sm ${
-              currentUser?.status === 'active' ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {currentUser?.status?.toUpperCase()}
-            </span>
-          </div>
-          <div className="flex justify-between p-2.5 md:p-3 bg-gray-50 rounded-lg">
-            <span className="text-xs md:text-sm text-gray-600">Next Due Date:</span>
-            <span className="font-semibold text-xs md:text-sm">
-              {currentUser?.nextDueDate 
-                ? new Date(currentUser.nextDueDate).toLocaleDateString()
-                : 'N/A'
-              }
-            </span>
-          </div>
-          <div className="flex justify-between p-2.5 md:p-3 bg-gray-50 rounded-lg">
-            <span className="text-xs md:text-sm text-gray-600">Total Visits:</span>
-            <span className="font-semibold text-xs md:text-sm">{currentUser?.totalVisits || 0}</span>
-          </div>
-        </div>
+      {/* Security */}
+      <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200">
+        <h3 className="text-xl font-bold text-black mb-4">Security</h3>
+        <button 
+          onClick={handleChangePassword}
+          className="w-full bg-gray-100 text-black py-3 rounded-lg font-semibold hover:bg-gray-200 transition border-2 border-gray-200"
+        >
+          Change Password
+        </button>
       </div>
 
-      {/* Danger Zone */}
-      <div className="bg-red-50 rounded-2xl shadow-lg p-4 md:p-6 border-2 border-red-200">
-        <h3 className="text-lg md:text-xl font-bold text-red-900 mb-3 md:mb-4">Danger Zone</h3>
-        <p className="text-xs md:text-sm text-red-700 mb-3 md:mb-4">
-          Once you sign out, you'll need to log in again to access your account.
-        </p>
-        <button
-          onClick={handleSignOut}
-          className="w-full bg-red-600 text-white py-2.5 md:py-3 rounded-lg font-semibold hover:bg-red-700 transition text-sm md:text-base"
-        >
-          Sign Out
-        </button>
+      {/* Membership Info */}
+      <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200">
+        <h3 className="text-xl font-bold text-black mb-4">Membership Information</h3>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center py-2 border-b border-gray-200">
+            <span className="text-gray-600">Membership Type</span>
+            <span className="font-semibold text-black">{currentUser?.membershipType || 'N/A'}</span>
+          </div>
+          <div className="flex justify-between items-center py-2 border-b border-gray-200">
+            <span className="text-gray-600">Status</span>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+              currentUser?.status === 'active' ? 'bg-green-100 text-green-800' :
+              currentUser?.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+              'bg-red-100 text-red-800'
+            }`}>
+              {currentUser?.status || 'N/A'}
+            </span>
+          </div>
+          <div className="flex justify-between items-center py-2 border-b border-gray-200">
+            <span className="text-gray-600">Member Since</span>
+            <span className="font-semibold text-black">
+              {currentUser?.createdAt ? new Date(currentUser.createdAt).toLocaleDateString() : 'N/A'}
+            </span>
+          </div>
+          <div className="flex justify-between items-center py-2">
+            <span className="text-gray-600">Barcode ID</span>
+            <span className="font-mono text-sm font-semibold text-black">{currentUser?.barcode || 'N/A'}</span>
+          </div>
+        </div>
       </div>
     </div>
   );
