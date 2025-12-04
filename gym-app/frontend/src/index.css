@@ -43,37 +43,134 @@ button {
 }
 
 /* ========================================
-   SIDEBAR RESPONSIVE
+   SIDEBAR FIX - Add to your index.css
    ======================================== */
 
-/* Desktop sidebar */
-.user-sidebar {
-  width: 16rem; /* 256px / 64 in Tailwind */
-  position: fixed;
-  left: 0;
-  top: 0;
-  height: 100vh;
-  z-index: 40;
-  transition: transform 0.3s ease;
+/* Ensure html and body fill viewport */
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
 }
 
-/* Mobile sidebar - hidden by default */
+/* Root app container */
+#root {
+  min-height: 100vh;
+  height: 100%;
+}
+
+/* Sidebar always fills full height */
+.user-sidebar-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 16rem; /* 256px */
+  background: #000;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  z-index: 40;
+}
+
+/* Prevent white space below sidebar */
+.user-sidebar-container::after {
+  content: '';
+  position: absolute;
+  bottom: -100px;
+  left: 0;
+  right: 0;
+  height: 100px;
+  background: #000;
+  pointer-events: none;
+}
+
+/* Main content wrapper */
+.user-dashboard-wrapper {
+  min-height: 100vh;
+  background: #f9fafb;
+}
+
+/* Mobile sidebar overlay */
 @media (max-width: 768px) {
-  .user-sidebar {
+  .user-sidebar-container {
     transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
   }
   
-  .user-sidebar.mobile-open {
+  .user-sidebar-container.mobile-open {
     transform: translateX(0);
   }
   
-  /* Overlay when sidebar is open */
-  .sidebar-overlay {
+  .sidebar-backdrop {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
     z-index: 30;
+    display: none;
   }
+  
+  .sidebar-backdrop.active {
+    display: block;
+  }
+}
+
+/* Alternative: Use viewport units */
+.sidebar-fullheight {
+  min-height: 100vh;
+  max-height: 100vh;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+}
+
+/* Fix for some browsers */
+.sidebar-fullheight::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 16rem;
+  background: #000;
+  z-index: -1;
+}
+
+/* Scrollable content area within sidebar */
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.sidebar-footer {
+  padding: 1.5rem;
+  border-top: 1px solid #374151;
+  margin-top: auto;
+  background: #000;
+}
+
+/* Custom scrollbar for sidebar */
+.user-sidebar-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.user-sidebar-container::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+.user-sidebar-container::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 3px;
+}
+
+.user-sidebar-container::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
 }
 
 /* ========================================
