@@ -13,23 +13,19 @@ const UserDashboard = () => {
   const [attendanceStatus, setAttendanceStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile sidebar state
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Initial fetch and auto-refresh every 30 seconds
   useEffect(() => {
     const fetchAttendanceStatus = async () => {
       try {
         setLoading(true);
-        console.log('🔄 Fetching attendance status...');
         const response = await API.get('/attendance/my-status');
-        console.log('📥 Attendance response:', response.data);
         
         if (response.data && response.data.success) {
           setAttendanceStatus(response.data);
-          console.log('✅ Attendance status set:', response.data);
         } else {
           setAttendanceStatus(null);
-          console.log('ℹ️ No check-in today');
         }
         
         setLastRefresh(new Date());
@@ -45,7 +41,6 @@ const UserDashboard = () => {
       try {
         const response = await API.get('/auth/me');
         setCurrentUser(response.data);
-        console.log('✅ User data refreshed');
       } catch (error) {
         console.error('Error refreshing user data:', error);
       }
@@ -69,7 +64,6 @@ const UserDashboard = () => {
   const handleManualRefresh = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Manual refresh triggered...');
       
       const [attendanceRes, userRes] = await Promise.all([
         API.get('/attendance/my-status'),
@@ -87,12 +81,39 @@ const UserDashboard = () => {
       }
       
       setLastRefresh(new Date());
-      console.log('✅ Manual refresh completed');
     } catch (error) {
       console.error('❌ Error during manual refresh:', error);
       setAttendanceStatus(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const calculateDuration = (checkInTime) => {
+    const now = new Date();
+    const checkIn = new Date(checkInTime);
+    const diff = Math.floor((now - checkIn) / 1000 / 60);
+    
+    if (diff < 60) {
+      return `${diff} min`;
+    } else {
+      const hours = Math.floor(diff / 60);
+      const mins = diff % 60;
+      return `${hours}h ${mins}m`;
+    }
+  };
+
+  const calculateSessionDuration = (checkInTime, checkOutTime) => {
+    const checkIn = new Date(checkInTime);
+    const checkOut = new Date(checkOutTime);
+    const diff = Math.floor((checkOut - checkIn) / 1000 / 60);
+    
+    if (diff < 60) {
+      return `${diff} minutes`;
+    } else {
+      const hours = Math.floor(diff / 60);
+      const mins = diff % 60;
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours} hour${hours > 1 ? 's' : ''}`;
     }
   };
 
@@ -305,34 +326,6 @@ const UserDashboard = () => {
     </div>
   );
 
-  const calculateDuration = (checkInTime) => {
-    const now = new Date();
-    const checkIn = new Date(checkInTime);
-    const diff = Math.floor((now - checkIn) / 1000 / 60);
-    
-    if (diff < 60) {
-      return `${diff} min`;
-    } else {
-      const hours = Math.floor(diff / 60);
-      const mins = diff % 60;
-      return `${hours}h ${mins}m`;
-    }
-  };
-
-  const calculateSessionDuration = (checkInTime, checkOutTime) => {
-    const checkIn = new Date(checkInTime);
-    const checkOut = new Date(checkOutTime);
-    const diff = Math.floor((checkOut - checkIn) / 1000 / 60);
-    
-    if (diff < 60) {
-      return `${diff} minutes`;
-    } else {
-      const hours = Math.floor(diff / 60);
-      const mins = diff % 60;
-      return mins > 0 ? `${hours}h ${mins}m` : `${hours} hour${hours > 1 ? 's' : ''}`;
-    }
-  };
-
   // Barcode Tab Content
   const BarcodeTab = () => (
     <div className="space-y-4 md:space-y-6">
@@ -373,7 +366,7 @@ const UserDashboard = () => {
     </div>
   );
 
-  // Other tabs remain similar but with responsive classes...
+  // Membership Tab
   const MembershipTab = () => (
     <div className="space-y-4 md:space-y-6">
       <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
@@ -415,6 +408,7 @@ const UserDashboard = () => {
     </div>
   );
 
+  // Payment History Tab
   const PaymentHistoryTab = () => (
     <div className="space-y-4 md:space-y-6">
       <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
@@ -432,6 +426,7 @@ const UserDashboard = () => {
     </div>
   );
 
+  // Profile Tab
   const ProfileTab = () => (
     <div className="space-y-4 md:space-y-6">
       <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
@@ -485,45 +480,59 @@ const UserDashboard = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Mobile Menu Button */}
-      <button
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 bg-black text-white p-3 rounded-lg shadow-lg"
-      >
-        {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-      </button>
+      {/* Sidebar - Desktop: always visible, Mobile: hidden by default */}
+      <aside className={`
+        fixed top-0 left-0 bottom-0 w-64 z-40
+        transform transition-transform duration-300 ease-in-out
+        lg:translate-x-0
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <UserSidebar 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab}
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+        />
+      </aside>
 
-      {/* Mobile Overlay */}
+      {/* Overlay - only visible on mobile when sidebar is open */}
       {isSidebarOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-30"
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
-      <div className={`fixed lg:static inset-y-0 left-0 z-40 transform ${
-        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } lg:translate-x-0 transition-transform duration-300 ease-in-out`}>
-        <UserSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      </div>
-
       {/* Main Content */}
-      <div className="flex-1 w-full lg:ml-64">
+      <main className="flex-1 w-full lg:ml-64">
         {/* Header */}
-        <div className="bg-black text-white p-4 md:p-6 pt-16 lg:pt-6">
+        <header className="bg-black text-white p-4 md:p-6">
           <div className="max-w-4xl mx-auto">
-            <h1 className="text-xl md:text-2xl font-bold">
-              {activeTab === 'home' ? 'Dashboard' : 
-               activeTab === 'barcode' ? 'My Barcode' :
-               activeTab === 'membership' ? 'Membership' :
-               activeTab === 'history' ? 'Payment History' :
-               activeTab === 'profile' ? 'Profile' :
-               activeTab === 'settings' ? 'Settings' : activeTab}
-            </h1>
-            <p className="text-xs md:text-sm text-gray-300">Welcome back, {currentUser?.name}</p>
+            <div className="flex items-center justify-between gap-3">
+              {/* Mobile Menu Button */}
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="lg:hidden p-2 hover:bg-gray-800 rounded-lg transition"
+                aria-label="Toggle menu"
+              >
+                {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
+              </button>
+
+              {/* Title */}
+              <div className="flex-1">
+                <h1 className="text-xl md:text-2xl font-bold">
+                  {activeTab === 'home' ? 'Dashboard' : 
+                   activeTab === 'barcode' ? 'My Barcode' :
+                   activeTab === 'membership' ? 'Membership' :
+                   activeTab === 'history' ? 'Payment History' :
+                   activeTab === 'profile' ? 'Profile' :
+                   activeTab === 'settings' ? 'Settings' : activeTab}
+                </h1>
+                <p className="text-xs md:text-sm text-gray-300">Welcome back, {currentUser?.name}</p>
+              </div>
+            </div>
           </div>
-        </div>
+        </header>
 
         {/* Content */}
         <div className="max-w-4xl mx-auto p-4 md:p-6">
@@ -534,7 +543,7 @@ const UserDashboard = () => {
           {activeTab === 'profile' && <ProfileTab />}
           {activeTab === 'settings' && <UserSettingsPanel />}
         </div>
-      </div>
+      </main>
     </div>
   );
 };
