@@ -262,13 +262,20 @@ const OverviewTab = ({ stats, users, payments }) => {
               {recentPayments.map((payment) => (
                 <div key={payment._id} className="flex justify-between items-center p-2 md:p-3 bg-gray-50 rounded-lg">
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-black text-sm md:text-base">₦{payment.amount?.toLocaleString()}</p>
-                    <p className="text-xs text-gray-600">{payment.membershipType}</p>
+                    <p className="font-semibold text-black text-sm md:text-base">
+                      {payment.user?.name || 'Unknown User'}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      ₦{payment.amount?.toLocaleString()} • {payment.membershipType}
+                    </p>
                   </div>
                   <div className="text-right ml-2">
                     <p className="text-xs text-gray-600 whitespace-nowrap">
                       {new Date(payment.createdAt).toLocaleDateString()}
                     </p>
+                    <span className="inline-block mt-1 px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded">
+                      {payment.status}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -358,12 +365,21 @@ const UsersTab = ({ users, refreshData }) => {
   );
 };
 
-// Payments Tab
+// Payments Tab - UPDATED WITH USER NAMES
 const PaymentsTab = ({ payments }) => {
   const [filterMethod, setFilterMethod] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const filteredPayments = payments.filter((payment) => {
-    return filterMethod === 'all' || payment.paymentMethod === filterMethod;
+    const matchesMethod = filterMethod === 'all' || payment.paymentMethod === filterMethod;
+    const matchesStatus = filterStatus === 'all' || payment.status === filterStatus;
+    const matchesSearch = !searchTerm || 
+      payment.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.membershipType?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchesMethod && matchesStatus && matchesSearch;
   });
 
   const totalRevenue = filteredPayments
@@ -372,24 +388,71 @@ const PaymentsTab = ({ payments }) => {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-xl shadow p-3 md:p-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+      {/* Summary Card */}
+      <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-lg p-4 md:p-6 text-white">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
-            <h3 className="font-bold text-xl md:text-2xl">₦{totalRevenue.toLocaleString()}</h3>
-            <p className="text-xs md:text-sm text-gray-600">{filteredPayments.length} transactions</p>
+            <h3 className="text-lg md:text-xl font-semibold mb-1">Total Revenue</h3>
+            <p className="text-3xl md:text-4xl font-bold">₦{totalRevenue.toLocaleString()}</p>
+            <p className="text-sm opacity-90 mt-1">{filteredPayments.length} transactions</p>
           </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="px-3 py-1 bg-white bg-opacity-20 rounded-full text-sm font-semibold">
+              {payments.filter(p => p.status === 'completed').length} Completed
+            </span>
+            <span className="px-3 py-1 bg-white bg-opacity-20 rounded-full text-sm font-semibold">
+              {payments.filter(p => p.status === 'pending').length} Pending
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-xl shadow p-3 md:p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <input
+            type="text"
+            placeholder="Search by name or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="px-3 md:px-4 py-2 border rounded-lg focus:outline-none focus:border-black text-sm md:text-base"
+          />
           <select
             value={filterMethod}
             onChange={(e) => setFilterMethod(e.target.value)}
-            className="px-3 md:px-4 py-2 border rounded-lg text-sm md:text-base"
+            className="px-3 md:px-4 py-2 border rounded-lg focus:outline-none focus:border-black text-sm md:text-base"
           >
             <option value="all">All Methods</option>
             <option value="Paystack">Paystack</option>
             <option value="Cash">Cash</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+          </select>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-3 md:px-4 py-2 border rounded-lg focus:outline-none focus:border-black text-sm md:text-base"
+          >
+            <option value="all">All Status</option>
+            <option value="completed">Completed</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
           </select>
         </div>
+        {(searchTerm || filterMethod !== 'all' || filterStatus !== 'all') && (
+          <button
+            onClick={() => {
+              setSearchTerm('');
+              setFilterMethod('all');
+              setFilterStatus('all');
+            }}
+            className="mt-3 text-sm text-blue-600 hover:text-blue-800 font-semibold"
+          >
+            Clear Filters
+          </button>
+        )}
       </div>
 
+      {/* Payments Table */}
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
         {filteredPayments.length === 0 ? (
           <div className="p-8 text-center">
@@ -397,28 +460,73 @@ const PaymentsTab = ({ payments }) => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px]">
+            <table className="w-full min-w-[768px]">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">User</th>
                   <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Date</th>
                   <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Amount</th>
                   <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Membership</th>
                   <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Method</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredPayments.map((payment) => (
                   <tr key={payment._id} className="border-b hover:bg-gray-50">
+                    <td className="py-2 md:py-3 px-2 md:px-4">
+                      <div className="flex items-center gap-2">
+                        {payment.user?.profilePicture ? (
+                          <img
+                            src={payment.user.profilePicture}
+                            alt={payment.user.name}
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">
+                              {payment.user?.name?.charAt(0).toUpperCase() || 'U'}
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-xs md:text-sm font-semibold text-black">
+                            {payment.user?.name || 'Unknown User'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {payment.user?.email || 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
                     <td className="py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm">
                       {new Date(payment.createdAt).toLocaleDateString()}
                     </td>
                     <td className="py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">
                       ₦{payment.amount?.toLocaleString()}
                     </td>
-                    <td className="py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm">{payment.membershipType}</td>
+                    <td className="py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm">
+                      <div>
+                        <p className="font-semibold">{payment.membershipType}</p>
+                        {payment.trainerAddon && (
+                          <span className="inline-block mt-1 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">
+                            + Trainer
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-2 md:py-3 px-2 md:px-4">
                       <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-semibold">
                         {payment.paymentMethod}
+                      </span>
+                    </td>
+                    <td className="py-2 md:py-3 px-2 md:px-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                        payment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {payment.status}
                       </span>
                     </td>
                   </tr>
