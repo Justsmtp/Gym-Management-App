@@ -1,4 +1,3 @@
-// frontend/src/components/User/PaymentScreen.jsx
 import React, { useState, useEffect } from 'react';
 import { CheckCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -14,16 +13,15 @@ const PaymentScreen = () => {
   const [error, setError] = useState(null);
   const [paystackLoaded, setPaystackLoaded] = useState(false);
 
-  const { currentUser, setCurrentScreen } = useApp();
+  const { currentUser, setCurrentScreen, setCurrentUser } = useApp();
 
-  // Check if Paystack script is loaded
   useEffect(() => {
     const checkPaystack = () => {
       if (typeof window.PaystackPop !== 'undefined') {
-        console.log('✅ Paystack script loaded successfully');
+        console.log('✅ Paystack script loaded');
         setPaystackLoaded(true);
       } else {
-        console.error('❌ Paystack script not found');
+        console.error('❌ Paystack not loaded');
         setError('Paystack is not loaded. Please refresh the page.');
       }
     };
@@ -34,18 +32,27 @@ const PaymentScreen = () => {
   }, []);
 
   const currentPlan = membershipPlans[selectedPlan];
-  const TRAINER_FEE = 1000000; // ₦10,000 in kobo
+  const TRAINER_FEE = 1000000;
   const totalAmount = currentPlan.amount + (addTrainer ? TRAINER_FEE : 0);
 
   const formatAmount = (kobo) => (kobo / 100).toLocaleString();
 
-  // Paystack payment handler - FIXED VERSION
+  // MAP display names to backend enum values
+  const getMembershipTypeForBackend = (displayName) => {
+    const mapping = {
+      'Deluxe Membership': 'Deluxe',
+      'Bi-Monthly Membership': 'Bi-Monthly',
+      'Weekly Membership Access': 'Weekly',
+      'Walk-in Membership Access': 'Walk-in',
+    };
+    return mapping[displayName] || displayName;
+  };
+
   const handlePaystackPayment = () => {
     console.log('🔍 Starting Paystack payment...');
     setError(null);
 
     try {
-      // Validation checks
       if (typeof window.PaystackPop === 'undefined') {
         setError('Paystack not loaded. Please refresh the page.');
         return;
@@ -62,16 +69,20 @@ const PaymentScreen = () => {
       }
 
       console.log('✅ Validation passed');
+      
+      // Convert display name to backend enum value
+      const backendMembershipType = getMembershipTypeForBackend(currentPlan.name);
+      
       console.log('📊 Payment details:', {
+        displayName: currentPlan.name,
+        backendType: backendMembershipType,
         email: currentUser.email,
         amount: totalAmount,
-        plan: currentPlan.name,
         trainer: addTrainer,
       });
 
       const paymentRef = `GYM-${currentUser.id || currentUser._id}-${Date.now()}`;
 
-      // Initialize Paystack - FIXED: Using arrow functions, not async
       const handler = window.PaystackPop.setup({
         key: paystackConfig.publicKey,
         email: currentUser.email,
@@ -83,7 +94,7 @@ const PaymentScreen = () => {
             {
               display_name: 'Membership Type',
               variable_name: 'membership_type',
-              value: currentPlan.name,
+              value: backendMembershipType, // Use backend enum value
             },
             {
               display_name: 'Duration',
@@ -101,24 +112,39 @@ const PaymentScreen = () => {
           console.log('✅ Payment successful:', response);
           setLoading(true);
 
-          // Verify payment with backend
+          // Verify with backend - use correct membership type
           API.post('/payments/verify', {
             reference: response.reference,
-            membershipType: currentPlan.name,
+            membershipType: backendMembershipType, // Use backend enum value
             amount: totalAmount,
             duration: currentPlan.duration,
             trainerAddon: addTrainer,
           })
             .then((verify) => {
               console.log('✅ Verification successful:', verify.data);
+              
+              // Update user status to active
+              const updatedUser = {
+                ...currentUser,
+                status: 'active',
+                paymentStatus: 'active',
+                isActive: true,
+                membershipType: backendMembershipType,
+              };
+              
+              setCurrentUser(updatedUser);
+              localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+              
               setPaymentSuccess(true);
               setLoading(false);
             })
             .catch((error) => {
               console.error('❌ Verification error:', error);
+              console.error('Error details:', error.response?.data);
               setLoading(false);
               alert(
                 '⚠️ Payment successful but verification failed.\n\n' +
+                'Error: ' + (error.response?.data?.message || error.message) + '\n\n' +
                 'Please contact support with reference:\n' +
                 response.reference
               );
@@ -126,7 +152,6 @@ const PaymentScreen = () => {
         },
         onClose: () => {
           console.log('ℹ️ Payment window closed');
-          alert('Payment cancelled. Click "Pay" to try again.');
         },
       });
 
@@ -139,17 +164,31 @@ const PaymentScreen = () => {
     }
   };
 
-  // Cash payment handler
   const handleCashPayment = () => {
     setLoading(true);
+    
+    const backendMembershipType = getMembershipTypeForBackend(currentPlan.name);
+    
     API.post('/payments', {
       amount: totalAmount / 100,
-      membershipType: currentPlan.name,
+      membershipType: backendMembershipType, // Use backend enum value
       paymentMethod: 'Cash',
       duration: currentPlan.duration,
       trainerAddon: addTrainer,
     })
       .then(() => {
+        // Update user status
+        const updatedUser = {
+          ...currentUser,
+          status: 'active',
+          paymentStatus: 'active',
+          isActive: true,
+          membershipType: backendMembershipType,
+        };
+        
+        setCurrentUser(updatedUser);
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        
         setPaymentSuccess(true);
         setLoading(false);
       })
@@ -160,7 +199,6 @@ const PaymentScreen = () => {
       });
   };
 
-  // Success Screen
   if (paymentSuccess) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
@@ -171,9 +209,14 @@ const PaymentScreen = () => {
         {addTrainer && (
           <p className="text-sm text-green-600 font-semibold mb-2">✓ Personal Trainer included</p>
         )}
+        <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 mb-6 max-w-md">
+          <p className="text-sm text-green-800 text-center">
+            🎉 Your account is now <strong>ACTIVE</strong>! You can now check in at the gym.
+          </p>
+        </div>
         <button
           onClick={() => setCurrentScreen('userDashboard')}
-          className="mt-6 bg-black text-white py-3 px-8 rounded-full font-semibold hover:bg-gray-800 transition"
+          className="bg-black text-white py-3 px-8 rounded-full font-semibold hover:bg-gray-800 transition"
         >
           Back to Dashboard
         </button>
@@ -181,7 +224,6 @@ const PaymentScreen = () => {
     );
   }
 
-  // Loading Screen
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
@@ -193,13 +235,9 @@ const PaymentScreen = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <div className="bg-black text-white p-6">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
-          <button
-            onClick={() => setCurrentScreen('userDashboard')}
-            className="text-white hover:text-gray-300"
-          >
+          <button onClick={() => setCurrentScreen('userDashboard')} className="text-white hover:text-gray-300">
             ← Back
           </button>
           <span className="font-bold">Select Membership Plan</span>
@@ -208,31 +246,23 @@ const PaymentScreen = () => {
       </div>
 
       <div className="max-w-4xl mx-auto p-6">
-        {/* Error Display */}
         {error && (
           <div className="mb-4 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
             <p className="text-sm text-red-800 font-semibold">⚠️ Payment Error:</p>
             <p className="text-xs text-red-700 mt-1">{error}</p>
-            <button
-              onClick={() => setError(null)}
-              className="mt-2 text-xs text-red-600 underline"
-            >
+            <button onClick={() => setError(null)} className="mt-2 text-xs text-red-600 underline">
               Dismiss
             </button>
           </div>
         )}
 
-        {/* Paystack Loading Warning */}
         {!paystackLoaded && (
           <div className="mb-4 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
             <p className="text-sm text-yellow-800 font-semibold">⚠️ Loading payment system...</p>
-            <p className="text-xs text-yellow-700 mt-1">
-              Please wait. If this persists, refresh the page.
-            </p>
+            <p className="text-xs text-yellow-700 mt-1">Please wait. If this persists, refresh the page.</p>
           </div>
         )}
 
-        {/* Membership Plans */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200 mb-6">
           <h3 className="text-xl font-bold text-black mb-4">Choose Your Plan</h3>
 
@@ -242,27 +272,20 @@ const PaymentScreen = () => {
                 key={key}
                 onClick={() => setSelectedPlan(key)}
                 className={`border-2 rounded-xl p-4 text-left transition ${
-                  selectedPlan === key
-                    ? 'border-black bg-gray-50 shadow-md'
-                    : 'border-gray-300 hover:border-black'
+                  selectedPlan === key ? 'border-black bg-gray-50 shadow-md' : 'border-gray-300 hover:border-black'
                 }`}
               >
                 <div className="flex justify-between items-start mb-2">
                   <span className="font-bold text-sm">{membershipPlans[key].name}</span>
                   {selectedPlan === key && <CheckCircle size={20} className="text-black" />}
                 </div>
-                <p className="text-2xl font-bold text-black mb-1">
-                  ₦{formatAmount(membershipPlans[key].amount)}
-                </p>
-                <p className="text-xs text-gray-600 mb-2">
-                  {membershipPlans[key].duration} Days
-                </p>
+                <p className="text-2xl font-bold text-black mb-1">₦{formatAmount(membershipPlans[key].amount)}</p>
+                <p className="text-xs text-gray-600 mb-2">{membershipPlans[key].duration} Days</p>
                 <p className="text-xs text-gray-500">{membershipPlans[key].description}</p>
               </button>
             ))}
           </div>
 
-          {/* Trainer Add-on */}
           <div className="mt-6 p-4 bg-purple-50 border-2 border-purple-200 rounded-xl">
             <label className="flex items-start space-x-3 cursor-pointer">
               <input
@@ -272,17 +295,12 @@ const PaymentScreen = () => {
                 className="mt-1 w-5 h-5 accent-black cursor-pointer"
               />
               <div className="flex-1">
-                <div className="font-bold text-black mb-1">
-                  Add Personal Trainer (+₦10,000)
-                </div>
-                <p className="text-xs text-gray-600">
-                  Personalized workout plans and one-on-one guidance.
-                </p>
+                <div className="font-bold text-black mb-1">Add Personal Trainer (+₦10,000)</div>
+                <p className="text-xs text-gray-600">Personalized workout plans and guidance.</p>
               </div>
             </label>
           </div>
 
-          {/* Summary */}
           <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
             <div className="flex justify-between items-center mb-2">
               <div>
@@ -291,9 +309,7 @@ const PaymentScreen = () => {
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-600">Plan Price:</p>
-                <p className="text-xl font-bold text-black">
-                  ₦{formatAmount(currentPlan.amount)}
-                </p>
+                <p className="text-xl font-bold text-black">₦{formatAmount(currentPlan.amount)}</p>
               </div>
             </div>
             {addTrainer && (
@@ -304,23 +320,18 @@ const PaymentScreen = () => {
             )}
             <div className="flex justify-between items-center border-t-2 border-blue-300 pt-3">
               <p className="text-base font-semibold text-gray-700">Total:</p>
-              <p className="text-3xl font-bold text-black">
-                ₦{formatAmount(totalAmount)}
-              </p>
+              <p className="text-3xl font-bold text-black">₦{formatAmount(totalAmount)}</p>
             </div>
           </div>
         </div>
 
-        {/* Payment Method */}
         <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200 mb-6">
           <h3 className="text-xl font-bold text-black mb-4">Payment Method</h3>
           <div className="space-y-3">
             <button
               onClick={() => setSelectedMethod('paystack')}
               className={`w-full border-2 rounded-lg p-4 text-left transition ${
-                selectedMethod === 'paystack'
-                  ? 'border-black bg-gray-50'
-                  : 'border-gray-300 hover:border-black'
+                selectedMethod === 'paystack' ? 'border-black bg-gray-50' : 'border-gray-300 hover:border-black'
               }`}
             >
               <div className="flex justify-between items-center">
@@ -328,18 +339,14 @@ const PaymentScreen = () => {
                   <div className="font-semibold">Paystack</div>
                   <div className="text-sm text-gray-500">Card, bank transfer, USSD</div>
                 </div>
-                {selectedMethod === 'paystack' && (
-                  <CheckCircle size={24} className="text-black" />
-                )}
+                {selectedMethod === 'paystack' && <CheckCircle size={24} className="text-black" />}
               </div>
             </button>
 
             <button
               onClick={() => setSelectedMethod('cash')}
               className={`w-full border-2 rounded-lg p-4 text-left transition ${
-                selectedMethod === 'cash'
-                  ? 'border-black bg-gray-50'
-                  : 'border-gray-300 hover:border-black'
+                selectedMethod === 'cash' ? 'border-black bg-gray-50' : 'border-gray-300 hover:border-black'
               }`}
             >
               <div className="flex justify-between items-center">
@@ -347,15 +354,12 @@ const PaymentScreen = () => {
                   <div className="font-semibold">Pay at Gym</div>
                   <div className="text-sm text-gray-500">Cash at reception</div>
                 </div>
-                {selectedMethod === 'cash' && (
-                  <CheckCircle size={24} className="text-black" />
-                )}
+                {selectedMethod === 'cash' && <CheckCircle size={24} className="text-black" />}
               </div>
             </button>
           </div>
         </div>
 
-        {/* Pay Button */}
         <button
           onClick={selectedMethod === 'paystack' ? handlePaystackPayment : handleCashPayment}
           disabled={loading || (selectedMethod === 'paystack' && !paystackLoaded)}
@@ -369,9 +373,7 @@ const PaymentScreen = () => {
         </button>
 
         {selectedMethod === 'paystack' && (
-          <p className="text-center text-xs text-gray-500 mt-4">
-            🔒 Secure payment powered by Paystack
-          </p>
+          <p className="text-center text-xs text-gray-500 mt-4">🔒 Secure payment powered by Paystack</p>
         )}
       </div>
     </div>
