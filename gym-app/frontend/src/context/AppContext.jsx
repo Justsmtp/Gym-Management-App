@@ -36,13 +36,10 @@ export const AppProvider = ({ children }) => {
     try {
       console.log('🔐 Attempting login...', { email, isAdmin });
       
-      // Make the API call
       const res = await API.post('/auth/login', { email, password, isAdmin });
       
-      console.log('📦 Raw response:', res);
       console.log('📦 Response data:', res.data);
       
-      // Extract token and user from response
       const { token, user } = res.data;
 
       if (!token || !user) {
@@ -53,7 +50,6 @@ export const AppProvider = ({ children }) => {
         };
       }
 
-      // Ensure user has id field (handle both _id and id)
       const userWithId = {
         ...user,
         id: user.id || user._id,
@@ -61,12 +57,10 @@ export const AppProvider = ({ children }) => {
 
       console.log('✅ Login successful:', userWithId);
 
-      // Store in localStorage
       localStorage.setItem('token', token);
       localStorage.setItem('currentUser', JSON.stringify(userWithId));
       localStorage.setItem('userType', userWithId.isAdmin ? 'admin' : 'user');
 
-      // Update state
       setCurrentUser(userWithId);
       setUserType(userWithId.isAdmin ? 'admin' : 'user');
       setIsAuthenticated(true);
@@ -77,45 +71,35 @@ export const AppProvider = ({ children }) => {
     } catch (err) {
       console.error('❌ Login error:', err);
       
-      // Handle network errors
       if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
-        console.error('🔌 Network Error - Cannot connect to backend');
         return { 
           success: false, 
-          message: '⚠️ Cannot connect to server. Please ensure:\n1. Backend is running on http://localhost:5000\n2. MongoDB is connected\n3. Check terminal for errors' 
+          message: '⚠️ Cannot connect to server. Please ensure backend is running.' 
         };
       }
       
-      // Handle timeout errors
       if (err.code === 'ECONNABORTED') {
-        console.error('⏰ Request timeout');
         return { 
           success: false, 
-          message: '⏰ Server is taking too long to respond. Please try again.' 
+          message: '⏰ Server timeout. Please try again.' 
         };
       }
       
-      // Handle HTTP error responses from backend
       if (err.response) {
-        console.error('🚫 Backend error:', err.response.status, err.response.data);
         const message = err.response.data?.message || err.response.data?.error || 'Login failed';
         return { success: false, message };
       }
       
-      // Handle request errors (before request was sent)
       if (err.request) {
-        console.error('📡 No response received from server');
         return { 
           success: false, 
           message: '📡 No response from server. Backend may be down.' 
         };
       }
       
-      // Unknown error
-      console.error('❓ Unknown error:', err.message);
       return { 
         success: false, 
-        message: err.message || 'An unexpected error occurred. Please try again.' 
+        message: err.message || 'An unexpected error occurred.' 
       };
     }
   };
@@ -130,7 +114,7 @@ export const AppProvider = ({ children }) => {
         isAdmin: payload.isAdmin,
       });
 
-      // Basic validation
+      // Validation
       if (!payload.name || !payload.email || !payload.phone || !payload.password) {
         return { success: false, message: 'All fields are required' };
       }
@@ -145,13 +129,47 @@ export const AppProvider = ({ children }) => {
 
       const res = await API.post('/auth/register', payload);
       
-      console.log('✅ Registration successful:', res.data);
+      console.log('✅ Registration response:', res.data);
+      
+      // Extract email sending status from backend
+      const emailSent = res.data.emailSent !== false; // Default to true if not specified
+      const emailError = res.data.emailError;
+      const emailId = res.data.emailId;
+      
+      // Log email status
+      if (emailSent && emailId) {
+        console.log('📧 Verification email sent successfully!');
+        console.log('📧 Email ID:', emailId);
+        console.log('📊 Check delivery: https://resend.com/emails/' + emailId);
+      } else if (emailError) {
+        console.error('❌ Email failed to send:', emailError);
+      }
+      
+      // Build comprehensive message
+      let message = res.data.message || 'Registration successful!';
+      
+      if (emailSent) {
+        message = `✅ ${message}\n\n📧 IMPORTANT: Check your email inbox AND spam/junk folder for the verification link.\n\n🔍 Search for "1st Impression Fitness" if you can't find it.`;
+      } else {
+        message = `⚠️ Registration successful but email failed to send.\n\nPlease use the "Resend Verification Email" option or contact support.`;
+      }
       
       return { 
         success: true, 
         user: res.data.user,
-        message: res.data.message 
+        message,
+        emailSent,
+        emailError,
+        emailId,
+        // Include debug info for troubleshooting
+        debug: {
+          emailAttempted: payload.email,
+          emailSent,
+          emailId,
+          timestamp: new Date().toISOString()
+        }
       };
+      
     } catch (err) {
       console.error('❌ Registration error:', err);
       
@@ -164,10 +182,8 @@ export const AppProvider = ({ children }) => {
         console.error('Server error:', err.response.status, message);
       } else if (err.request) {
         message = '📡 No response from server. Backend may be down.';
-        console.error('No response from server');
       } else {
         message = err.message || message;
-        console.error('Request setup error:', message);
       }
       
       return { success: false, message };
@@ -184,9 +200,38 @@ export const AppProvider = ({ children }) => {
 
       const res = await API.post('/auth/resend', { email });
       
-      console.log('✅ Verification email sent');
+      console.log('✅ Resend response:', res.data);
       
-      return { success: true, message: res.data.message || 'Verification email sent' };
+      // Check if email was actually sent
+      const emailSent = res.data.emailSent !== false;
+      const emailError = res.data.emailError;
+      const emailId = res.data.emailId;
+      
+      if (emailSent && emailId) {
+        console.log('📧 Verification email resent successfully!');
+        console.log('📧 Email ID:', emailId);
+        console.log('📊 Check delivery: https://resend.com/emails/' + emailId);
+      }
+      
+      let message = res.data.message || 'Verification email sent';
+      
+      if (emailSent) {
+        message = `✅ ${message}\n\n📧 Check your inbox AND spam/junk folder.\n🔍 Search for "1st Impression Fitness"`;
+      } else {
+        message = `❌ Failed to send email: ${emailError || 'Unknown error'}`;
+      }
+      
+      return { 
+        success: emailSent, 
+        message,
+        emailId,
+        emailSent,
+        debug: {
+          emailId,
+          timestamp: new Date().toISOString()
+        }
+      };
+      
     } catch (err) {
       console.error('❌ Resend error:', err);
       const message = err.response?.data?.message || 'Failed to resend verification email';
@@ -206,7 +251,6 @@ export const AppProvider = ({ children }) => {
       
       console.log('✅ Check-in successful:', res.data);
       
-      // Update current user if this is their check-in
       if (currentUser && currentUser.barcode === barcode) {
         const updatedUser = {
           ...currentUser,
@@ -233,7 +277,6 @@ export const AppProvider = ({ children }) => {
     try {
       console.log('💳 Processing payment for duration:', duration);
 
-      // Update current user with new membership dates
       if (currentUser) {
         const now = new Date();
         const nextDueDate = new Date(now.getTime() + duration * 24 * 60 * 60 * 1000);
@@ -294,4 +337,3 @@ export const AppProvider = ({ children }) => {
     </AppContext.Provider>
   );
 };
-
