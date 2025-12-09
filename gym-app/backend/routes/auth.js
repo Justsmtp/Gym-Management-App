@@ -18,6 +18,16 @@ const membershipDetails = {
 router.post('/register', async (req, res) => {
   try {
     const { name, email, phone, password, membershipType, isAdmin } = req.body;
+    
+    console.log('\n🔍 ========================================');
+    console.log('🔍 REGISTRATION ATTEMPT');
+    console.log('🔍 ========================================');
+    console.log('📧 Email:', email);
+    console.log('👤 Name:', name);
+    console.log('📱 Phone:', phone);
+    console.log('🎫 Membership:', membershipType);
+    console.log('⏰ Time:', new Date().toISOString());
+    
     if (!name || !email || !phone || !password || !membershipType) {
       return res.status(400).json({ message: 'All fields are required' });
     }
@@ -50,17 +60,63 @@ router.post('/register', async (req, res) => {
     });
 
     await user.save();
+    console.log('✅ User saved to database');
+    console.log('📧 User email (saved):', user.email);
+    console.log('🔑 Verification token:', verificationToken);
 
-    // send verification email (do not block if email fails)
+    // Send verification email with detailed logging
+    console.log('\n📧 ATTEMPTING TO SEND VERIFICATION EMAIL');
+    console.log('─────────────────────────────────────────');
+    console.log('To:', user.email);
+    console.log('Name:', user.name);
+    console.log('Token:', verificationToken);
+    console.log('Calling sendVerificationEmail()...');
+    
+    let emailSent = false;
+    let emailError = null;
+    let emailId = null;
+
     try {
-      await sendVerificationEmail({ to: user.email, token: verificationToken, name: user.name });
+      const emailResult = await sendVerificationEmail({ 
+        to: user.email, 
+        token: verificationToken, 
+        name: user.name 
+      });
+      
+      emailSent = true;
+      emailId = emailResult?.id;
+      
+      console.log('\n✅ ========================================');
+      console.log('✅ EMAIL SENT SUCCESSFULLY!');
+      console.log('✅ ========================================');
+      console.log('📧 Email ID:', emailId || 'No ID returned');
+      console.log('📧 To:', user.email);
+      console.log('📊 Check Resend Dashboard:');
+      console.log('   https://resend.com/emails/' + (emailId || ''));
+      console.log('========================================\n');
+      
     } catch (mailErr) {
-      console.error('send email failed', mailErr);
+      emailError = mailErr.message;
+      
+      console.error('\n❌ ========================================');
+      console.error('❌ EMAIL SENDING FAILED!');
+      console.error('❌ ========================================');
+      console.error('Error Message:', mailErr.message);
+      console.error('Error Code:', mailErr.code);
+      console.error('Full Error:', mailErr);
+      console.error('========================================\n');
+      
+      // Log to help user understand what happened
+      console.error('⚠️  User was registered but email failed to send');
+      console.error('⚠️  User can use /api/auth/resend to get a new verification email');
     }
 
+    // Always return success if user was created
     res.status(201).json({
       success: true,
-      message: 'Registration successful. Check your email to verify your account.',
+      message: emailSent 
+        ? 'Registration successful! Check your email (and spam folder) for verification link.' 
+        : 'Registration successful, but email sending failed. Please use "Resend Verification Email" option.',
       user: {
         id: user._id,
         name: user.name,
@@ -70,9 +126,22 @@ router.post('/register', async (req, res) => {
         membershipDuration: user.membershipDuration,
         status: user.status,
       },
+      emailSent,
+      emailError: emailError || undefined,
+      emailId: emailId || undefined,
+      debug: {
+        timestamp: new Date().toISOString(),
+        emailAttempted: user.email,
+        resendAvailable: !emailSent
+      }
     });
+    
   } catch (err) {
-    console.error('Registration error:', err.message);
+    console.error('\n❌ REGISTRATION ERROR');
+    console.error('Error:', err.message);
+    console.error('Stack:', err.stack);
+    console.error('========================================\n');
+    
     res.status(500).json({ message: 'Server error during registration' });
   }
 });
@@ -81,15 +150,26 @@ router.post('/register', async (req, res) => {
 router.get('/verify/:token', async (req, res) => {
   try {
     const token = req.params.token;
+    
+    console.log('\n🔍 EMAIL VERIFICATION ATTEMPT');
+    console.log('Token:', token);
+    
     if (!token) return res.status(400).json({ message: 'Token required' });
 
     const user = await User.findOne({ verificationToken: token });
-    if (!user) return res.status(400).json({ message: 'Invalid or expired token' });
+    if (!user) {
+      console.error('❌ Invalid token - no user found');
+      return res.status(400).json({ message: 'Invalid or expired token' });
+    }
 
+    console.log('✅ User found:', user.email);
+    
     user.isVerified = true;
     user.verificationToken = null;
     await user.save();
 
+    console.log('✅ User verified successfully:', user.email);
+    
     return res.json({ success: true, message: 'Email verified successfully. You may now login.' });
   } catch (err) {
     console.error('Verification error:', err.message);
@@ -101,22 +181,63 @@ router.get('/verify/:token', async (req, res) => {
 router.post('/resend', async (req, res) => {
   try {
     const { email } = req.body;
+    
+    console.log('\n📧 RESEND VERIFICATION EMAIL REQUEST');
+    console.log('Email:', email);
+    
     if (!email) return res.status(400).json({ message: 'Email required' });
 
     const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    if (user.isVerified) return res.status(400).json({ message: 'User already verified' });
-
-    user.verificationToken = crypto.randomBytes(24).toString('hex');
-    await user.save();
-
-    try {
-      await sendVerificationEmail({ to: user.email, token: user.verificationToken, name: user.name });
-    } catch (mailErr) {
-      console.error('Resend email error:', mailErr);
+    if (!user) {
+      console.error('❌ User not found:', email);
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    if (user.isVerified) {
+      console.log('⚠️  User already verified:', email);
+      return res.status(400).json({ message: 'User already verified' });
     }
 
-    res.json({ success: true, message: 'Verification email resent' });
+    // Generate new token
+    user.verificationToken = crypto.randomBytes(24).toString('hex');
+    await user.save();
+    
+    console.log('🔑 New verification token generated');
+    console.log('📧 Attempting to send email to:', user.email);
+
+    let emailSent = false;
+    let emailError = null;
+    let emailId = null;
+
+    try {
+      const emailResult = await sendVerificationEmail({ 
+        to: user.email, 
+        token: user.verificationToken, 
+        name: user.name 
+      });
+      
+      emailSent = true;
+      emailId = emailResult?.id;
+      
+      console.log('✅ Verification email resent successfully');
+      console.log('📧 Email ID:', emailId);
+      
+    } catch (mailErr) {
+      emailError = mailErr.message;
+      console.error('❌ Resend email error:', mailErr.message);
+      console.error('Full error:', mailErr);
+    }
+
+    res.json({ 
+      success: emailSent, 
+      message: emailSent 
+        ? 'Verification email resent! Check your inbox and spam folder.' 
+        : 'Failed to send email. Please try again later.',
+      emailSent,
+      emailError: emailError || undefined,
+      emailId: emailId || undefined
+    });
+    
   } catch (err) {
     console.error('Resend error:', err.message);
     res.status(500).json({ message: 'Server error' });
@@ -127,25 +248,40 @@ router.post('/resend', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password, isAdmin } = req.body;
+    
+    console.log('\n🔐 LOGIN ATTEMPT');
+    console.log('Email:', email);
+    console.log('Is Admin:', !!isAdmin);
+    
     if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
 
     const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) return res.status(400).json({ message: 'Invalid credentials' });
+    if (!user) {
+      console.log('❌ User not found:', email);
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
 
     if (isAdmin && !user.isAdmin) {
+      console.log('❌ Not an admin account:', email);
       return res.status(403).json({ message: 'Access denied. Not an admin account.' });
     }
 
     if (!user.isVerified) {
+      console.log('⚠️  Email not verified:', email);
       return res.status(403).json({ message: 'Please verify your email before logging in.' });
     }
 
     const match = await user.comparePassword(password);
-    if (!match) return res.status(400).json({ message: 'Invalid credentials' });
+    if (!match) {
+      console.log('❌ Invalid password for:', email);
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
 
     const token = jwt.sign({ user: { id: user._id, isAdmin: user.isAdmin } }, process.env.JWT_SECRET || 'secret', {
       expiresIn: '30d',
     });
+
+    console.log('✅ Login successful:', email);
 
     res.json({
       success: true,
@@ -197,17 +333,14 @@ router.put('/update-profile', async (req, res) => {
 
     const { name, email, phone } = req.body;
 
-    // Validation
     if (!name || !email || !phone) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    // Validate phone format (11 digits)
     if (!/^[0-9]{11}$/.test(phone)) {
       return res.status(400).json({ message: 'Phone must be exactly 11 digits' });
     }
 
-    // Check if email is already taken by another user
     const existingUser = await User.findOne({ 
       email: email.toLowerCase(), 
       _id: { $ne: userId } 
@@ -217,7 +350,6 @@ router.put('/update-profile', async (req, res) => {
       return res.status(400).json({ message: 'Email already in use by another account' });
     }
 
-    // Update user
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -271,7 +403,6 @@ router.put('/change-password', async (req, res) => {
 
     const { currentPassword, newPassword } = req.body;
 
-    // Validation
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: 'Current and new password are required' });
     }
@@ -280,19 +411,16 @@ router.put('/change-password', async (req, res) => {
       return res.status(400).json({ message: 'New password must be at least 6 characters' });
     }
 
-    // Find user
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Verify current password
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
       return res.status(401).json({ message: 'Current password is incorrect' });
     }
 
-    // Update password
     user.password = newPassword;
     await user.save();
 
@@ -328,7 +456,6 @@ router.get('/notification-preferences', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Return notification preferences (stored in user model or default)
     const notifications = user.notificationPreferences || [
       { id: 'email', title: 'Email Notifications', desc: 'Receive payment reminders via email', enabled: true },
       { id: 'push', title: 'Push Notifications', desc: 'Get notified about class schedules', enabled: true },
@@ -374,6 +501,5 @@ router.put('/notification-preferences', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-
 
 module.exports = router;
