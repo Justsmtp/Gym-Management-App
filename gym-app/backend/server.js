@@ -62,7 +62,7 @@ mongoose
 
 // Import Routes
 const authRoutes = require('./routes/auth');
-const paymentsRoutes = require('./routes/payments');
+const paymentsRoutes = require('./routes/payment');
 const attendanceRoutes = require('./routes/attendance');
 const usersRoutes = require('./routes/users');
 const remindersRoutes = require('./routes/reminders');
