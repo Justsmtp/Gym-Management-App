@@ -1,7 +1,8 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
 // frontend/src/components/User/UserDashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { User, CheckCircle, XCircle, QrCode, Clock, LogIn, LogOut, RefreshCw, Menu, X } from 'lucide-react';
+import { User, CheckCircle, XCircle, QrCode, Clock, LogIn, LogOut, RefreshCw, Menu, X, CreditCard } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import API from '../../api/api';
 import UserSidebar from './UserSidebar';
@@ -11,6 +12,7 @@ const UserDashboard = () => {
   const { currentUser, setCurrentUser, setCurrentScreen } = useApp();
   const [activeTab, setActiveTab] = useState('home');
   const [attendanceStatus, setAttendanceStatus] = useState(null);
+  const [paymentHistory, setPaymentHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -37,6 +39,34 @@ const UserDashboard = () => {
       }
     };
 
+    const fetchPaymentHistory = async () => {
+      try {
+        if (!currentUser?._id) return;
+        
+        // Try the new endpoint first, fallback to old endpoint
+        let response;
+        try {
+          response = await API.get('/payments/my-history');
+          if (response.data && response.data.payments) {
+            setPaymentHistory(response.data.payments);
+          }
+        } catch (err) {
+          // Fallback to old endpoint if new one doesn't exist
+          if (err.response?.status === 404) {
+            response = await API.get(`/payments/user/${currentUser._id}`);
+            if (response.data) {
+              setPaymentHistory(Array.isArray(response.data) ? response.data : []);
+            }
+          } else {
+            throw err;
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error fetching payment history:', error);
+        setPaymentHistory([]);
+      }
+    };
+
     const refreshUserData = async () => {
       try {
         const response = await API.get('/auth/me');
@@ -47,8 +77,11 @@ const UserDashboard = () => {
     };
 
     const initialFetch = async () => {
-      await fetchAttendanceStatus();
-      await refreshUserData();
+      await Promise.all([
+        fetchAttendanceStatus(),
+        refreshUserData(),
+        fetchPaymentHistory()
+      ]);
     };
     
     initialFetch();
@@ -56,6 +89,7 @@ const UserDashboard = () => {
     const interval = setInterval(() => {
       fetchAttendanceStatus();
       refreshUserData();
+      fetchPaymentHistory();
     }, 30000);
     
     return () => clearInterval(interval);
@@ -65,10 +99,8 @@ const UserDashboard = () => {
     try {
       setLoading(true);
       
-      const [attendanceRes, userRes] = await Promise.all([
-        API.get('/attendance/my-status'),
-        API.get('/auth/me')
-      ]);
+      const attendanceRes = await API.get('/attendance/my-status');
+      const userRes = await API.get('/auth/me');
       
       if (attendanceRes.data && attendanceRes.data.success) {
         setAttendanceStatus(attendanceRes.data);
@@ -78,6 +110,23 @@ const UserDashboard = () => {
       
       if (userRes.data) {
         setCurrentUser(userRes.data);
+      }
+
+      // Fetch payments with fallback
+      if (userRes.data?._id) {
+        try {
+          const paymentsRes = await API.get('/payments/my-history');
+          if (paymentsRes.data && paymentsRes.data.payments) {
+            setPaymentHistory(paymentsRes.data.payments);
+          }
+        } catch (err) {
+          if (err.response?.status === 404) {
+            const paymentsRes = await API.get(`/payments/user/${userRes.data._id}`);
+            if (paymentsRes.data) {
+              setPaymentHistory(Array.isArray(paymentsRes.data) ? paymentsRes.data : []);
+            }
+          }
+        }
       }
       
       setLastRefresh(new Date());
@@ -114,6 +163,43 @@ const UserDashboard = () => {
       const hours = Math.floor(diff / 60);
       const mins = diff % 60;
       return mins > 0 ? `${hours}h ${mins}m` : `${hours} hour${hours > 1 ? 's' : ''}`;
+    }
+  };
+
+  // Get actual membership dates from currentUser
+  const getMembershipStartDate = () => {
+    return currentUser?.membershipStartDate || currentUser?.startDate || currentUser?.activationDate || currentUser?.createdAt;
+  };
+
+  const getMembershipEndDate = () => {
+    return currentUser?.membershipEndDate || currentUser?.expiryDate || currentUser?.nextDueDate;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return 'N/A';
+    }
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return 'N/A';
     }
   };
 
@@ -170,11 +256,9 @@ const UserDashboard = () => {
           </div>
 
           <div className="bg-gray-50 rounded-xl p-3 md:p-4 border-2 border-gray-200">
-            <p className="text-xs md:text-sm text-gray-600 mb-1">Next Due Date</p>
+            <p className="text-xs md:text-sm text-gray-600 mb-1">Membership Expires</p>
             <p className="text-base md:text-lg font-bold text-black">
-              {currentUser?.nextDueDate 
-                ? new Date(currentUser.nextDueDate).toLocaleDateString()
-                : 'N/A'}
+              {formatDate(getMembershipEndDate())}
             </p>
           </div>
         </div>
@@ -388,13 +472,13 @@ const UserDashboard = () => {
           <div className="flex justify-between items-center py-3 border-b border-gray-200">
             <span className="text-sm md:text-base text-gray-600">Start Date</span>
             <span className="font-semibold text-sm md:text-base text-black">
-              {currentUser?.membershipStartDate ? new Date(currentUser.membershipStartDate).toLocaleDateString() : 'N/A'}
+              {formatDate(getMembershipStartDate())}
             </span>
           </div>
           <div className="flex justify-between items-center py-3">
             <span className="text-sm md:text-base text-gray-600">Expiry Date</span>
             <span className="font-semibold text-sm md:text-base text-black">
-              {currentUser?.membershipEndDate ? new Date(currentUser.membershipEndDate).toLocaleDateString() : 'N/A'}
+              {formatDate(getMembershipEndDate())}
             </span>
           </div>
         </div>
@@ -412,16 +496,75 @@ const UserDashboard = () => {
   const PaymentHistoryTab = () => (
     <div className="space-y-4 md:space-y-6">
       <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
-        <h3 className="text-lg md:text-xl font-bold text-black mb-4">Payment History</h3>
-        <div className="text-center py-8 md:py-12">
-          <p className="text-sm md:text-base text-gray-500">No payment history available</p>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg md:text-xl font-bold text-black">Payment History</h3>
           <button
-            onClick={() => setCurrentScreen('paymentHistory')}
-            className="mt-4 px-4 md:px-6 py-2 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition text-sm md:text-base"
+            onClick={handleManualRefresh}
+            disabled={loading}
+            className="text-gray-600 hover:text-black transition disabled:opacity-50"
+            title="Refresh payments"
           >
-            View Full History
+            <RefreshCw size={18} className={`${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
+        
+        {loading && paymentHistory.length === 0 ? (
+          <div className="text-center py-8 md:py-12">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-b-4 border-black mx-auto mb-4"></div>
+            <p className="text-sm text-gray-500">Loading payment history...</p>
+          </div>
+        ) : paymentHistory.length > 0 ? (
+          <div className="space-y-3">
+            {paymentHistory.slice(0, 5).map((payment, index) => (
+              <div key={payment._id || index} className="border-b border-gray-200 pb-3 last:border-b-0">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <CreditCard size={20} className="text-green-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm md:text-base text-black">
+                        {payment.membershipType || 'Membership Payment'}
+                      </p>
+                      <p className="text-xs text-gray-500">{formatDateTime(payment.createdAt || payment.date)}</p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Method: <span className="font-medium">{payment.paymentMethod || 'N/A'}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-sm md:text-base text-green-600">
+                      ₦{payment.amount?.toLocaleString() || '0'}
+                    </p>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      payment.status === 'completed' || payment.status === 'paid' 
+                        ? 'bg-green-100 text-green-800' 
+                        : payment.status === 'pending'
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {payment.status || 'completed'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {paymentHistory.length > 5 && (
+              <button
+                onClick={() => setCurrentScreen('paymentHistory')}
+                className="w-full mt-4 px-4 py-2 bg-gray-100 text-black rounded-lg font-semibold hover:bg-gray-200 transition text-sm"
+              >
+                View All {paymentHistory.length} Payments
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-8 md:py-12">
+            <CreditCard size={48} className="text-gray-300 mx-auto mb-4" />
+            <p className="text-sm md:text-base text-gray-500">No payment history available</p>
+            <p className="text-xs text-gray-400 mt-2">Your payments will appear here once made</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -464,7 +607,7 @@ const UserDashboard = () => {
           <div>
             <label className="block text-xs md:text-sm font-semibold text-gray-600 mb-1">Member Since</label>
             <p className="text-base md:text-lg font-semibold text-black">
-              {currentUser?.createdAt ? new Date(currentUser.createdAt).toLocaleDateString() : 'N/A'}
+              {formatDate(currentUser?.createdAt)}
             </p>
           </div>
           <button
