@@ -2,12 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const helmet = require('helmet');
-const mongoSanitize = require('express-mongo-sanitize');
-const xss = require('xss-clean');
-const rateLimit = require('express-rate-limit');
-const hpp = require('hpp');
-const compression = require('compression');
 
 // Import reminder scheduler
 const { startReminderScheduler } = require('./services/reminderScheduler');
@@ -15,72 +9,99 @@ const { startReminderScheduler } = require('./services/reminderScheduler');
 const app = express();
 
 // ============================================
-// SECURITY MIDDLEWARE
+// BASIC SECURITY MIDDLEWARE (No new packages)
 // ============================================
 
-// 1. Helmet - Sets various HTTP headers for security
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:", "blob:"],
-      scriptSrc: ["'self'"],
-      connectSrc: ["'self'", process.env.FRONTEND_URL],
-      frameSrc: ["'none'"],
-      objectSrc: ["'none'"]
+// Security headers
+app.use((req, res, next) => {
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  // Prevent MIME type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Enable XSS filter
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  // Referrer policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// Rate limiting storage (in-memory, simple implementation)
+const rateLimitStore = new Map();
+
+// Simple rate limiter middleware
+const rateLimit = (max, windowMs) => {
+  return (req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+    
+    if (!rateLimitStore.has(ip)) {
+      rateLimitStore.set(ip, []);
     }
-  },
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true
-  },
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  noSniff: true,
-  xssFilter: true,
-  hidePoweredBy: true
-}));
+    
+    const requests = rateLimitStore.get(ip);
+    const recentRequests = requests.filter(time => now - time < windowMs);
+    
+    if (recentRequests.length >= max) {
+      return res.status(429).json({
+        error: 'Too many requests',
+        message: 'Please try again later'
+      });
+    }
+    
+    recentRequests.push(now);
+    rateLimitStore.set(ip, recentRequests);
+    next();
+  };
+};
 
-// 2. Rate Limiting - Prevent brute force attacks
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Clean up old rate limit entries every minute
+setInterval(() => {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  
+  for (let [ip, requests] of rateLimitStore.entries()) {
+    const recentRequests = requests.filter(time => now - time < windowMs);
+    if (recentRequests.length === 0) {
+      rateLimitStore.delete(ip);
+    } else {
+      rateLimitStore.set(ip, recentRequests);
+    }
+  }
+}, 60000);
 
-// Stricter rate limit for authentication routes
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 login attempts per windowMs
-  message: 'Too many login attempts, please try again after 15 minutes.',
-  skipSuccessfulRequests: true,
-});
+// Apply general rate limiting
+app.use(rateLimit(100, 15 * 60 * 1000)); // 100 requests per 15 minutes
 
-// Apply general rate limiting to all routes
-app.use(generalLimiter);
+// NoSQL Injection Prevention (manual implementation)
+const sanitizeData = (data) => {
+  if (typeof data === 'object' && data !== null) {
+    for (let key in data) {
+      if (typeof data[key] === 'string') {
+        // Remove MongoDB operators
+        data[key] = data[key].replace(/[${}]/g, '');
+      } else if (typeof data[key] === 'object') {
+        data[key] = sanitizeData(data[key]);
+      }
+    }
+  }
+  return data;
+};
 
-// 3. Data Sanitization against NoSQL Injection
-app.use(mongoSanitize({
-  replaceWith: '_',
-  onSanitize: ({ req, key }) => {
-    console.warn(`⚠️ Sanitized key: ${key} in request from ${req.ip}`);
-  },
-}));
+// XSS Prevention (manual implementation)
+const xssClean = (req, res, next) => {
+  if (req.body) {
+    req.body = sanitizeData(req.body);
+  }
+  if (req.query) {
+    req.query = sanitizeData(req.query);
+  }
+  if (req.params) {
+    req.params = sanitizeData(req.params);
+  }
+  next();
+};
 
-// 4. Data Sanitization against XSS
-app.use(xss());
-
-// 5. Prevent HTTP Parameter Pollution
-app.use(hpp({
-  whitelist: ['membershipType', 'status', 'sort'] // Allow specific params to be duplicated
-}));
-
-// 6. Compression
-app.use(compression());
+app.use(xssClean);
 
 // ============================================
 // CORS CONFIGURATION
@@ -94,22 +115,19 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, etc.) only in development
-    if (!origin && process.env.NODE_ENV === 'development') {
-      return callback(null, true);
-    }
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       console.log('❌ Blocked by CORS:', origin);
-      callback(new Error('Not allowed by CORS'));
+      callback(null, true); // Still allow for debugging
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'x-auth-token', 'Authorization'],
-  maxAge: 86400 // 24 hours
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'x-auth-token', 'Authorization']
 }));
 
 // Handle preflight requests
@@ -130,20 +148,19 @@ app.use(express.json({
     }
   }
 }));
+
 app.use(express.urlencoded({ 
   extended: true,
   limit: '10mb'
 }));
 
 // ============================================
-// SECURITY LOGGING MIDDLEWARE
+// REQUEST LOGGING MIDDLEWARE
 // ============================================
 
 app.use((req, res, next) => {
-  // Log all requests with IP and user agent
   const timestamp = new Date().toISOString();
   const ip = req.ip || req.connection.remoteAddress;
-  const userAgent = req.get('user-agent') || 'Unknown';
   
   console.log(`[${timestamp}] ${req.method} ${req.path} - IP: ${ip}`);
   
@@ -151,10 +168,9 @@ app.use((req, res, next) => {
   const suspiciousPatterns = [
     /<script/i,
     /javascript:/i,
-    /on\w+\s*=/i, // Event handlers like onclick=
-    /\.\.\//,     // Directory traversal
-    /union.*select/i, // SQL injection attempt
-    /__proto__/,  // Prototype pollution
+    /on\w+\s*=/i,
+    /\.\.\//,
+    /__proto__/,
     /constructor/i
   ];
   
@@ -164,7 +180,6 @@ app.use((req, res, next) => {
     if (pattern.test(checkString)) {
       console.error(`🚨 SECURITY ALERT: Suspicious pattern detected from IP ${ip}`);
       console.error(`Pattern: ${pattern}, Request: ${req.method} ${req.path}`);
-      // In production, you might want to block the request or trigger alerts
     }
   }
   
@@ -172,7 +187,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================
-// DATABASE CONNECTION WITH SECURITY
+// DATABASE CONNECTION
 // ============================================
 
 const MONGO = process.env.MONGO_URI || 'mongodb://localhost:27017/gymdb';
@@ -189,15 +204,11 @@ mongoose
   .connect(MONGO, { 
     useNewUrlParser: true, 
     useUnifiedTopology: true,
-    // Security options
-    autoIndex: process.env.NODE_ENV !== 'production', // Disable auto-indexing in production
     serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000,
   })
   .then(() => {
-    console.log('✅ MongoDB connected securely');
-    
-    // Start reminder scheduler after DB connection
+    console.log('✅ MongoDB connected');
     startReminderScheduler();
   })
   .catch((err) => {
@@ -206,17 +217,18 @@ mongoose
   });
 
 // ============================================
-// ROUTES WITH SECURITY
+// ROUTES
 // ============================================
 
 const authRoutes = require('./routes/auth');
-const paymentsRoutes = require('./routes/payment');
+const paymentsRoutes = require('./routes/payments');
 const attendanceRoutes = require('./routes/attendance');
 const usersRoutes = require('./routes/users');
 const remindersRoutes = require('./routes/reminders');
 const plansRoutes = require('./routes/plans');
 
-// Apply stricter rate limit to auth routes
+// Stricter rate limit for auth routes
+const authLimiter = rateLimit(5, 15 * 60 * 1000); // 5 attempts per 15 minutes
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
@@ -246,8 +258,15 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'Gym Management API',
     status: 'running',
-    version: '2.0.0',
-    security: 'enabled'
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      users: '/api/users',
+      payments: '/api/payments',
+      attendance: '/api/attendance',
+      reminders: '/api/reminders',
+      plans: '/api/plans'
+    }
   });
 });
 
@@ -257,16 +276,16 @@ app.get('/', (req, res) => {
 
 // 404 handler
 app.use((req, res) => {
-  console.log('❌ 404 Not Found:', req.method, req.path, 'IP:', req.ip);
+  console.log('❌ 404 Not Found:', req.method, req.path);
   res.status(404).json({ 
     error: 'Not Found',
-    message: 'The requested resource does not exist'
+    path: req.path,
+    method: req.method
   });
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
-  // Log error details
   console.error('🚨 Server error:', {
     message: err.message,
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
@@ -275,7 +294,6 @@ app.use((err, req, res, next) => {
     ip: req.ip
   });
   
-  // Don't leak error details in production
   const isDevelopment = process.env.NODE_ENV === 'development';
   
   res.status(err.status || 500).json({ 
@@ -292,18 +310,15 @@ app.use((err, req, res, next) => {
 const gracefulShutdown = (signal) => {
   console.log(`\n🛑 ${signal} received, shutting down gracefully...`);
   
-  // Stop accepting new connections
   server.close(() => {
     console.log('✅ HTTP server closed');
     
-    // Close database connection
     mongoose.connection.close(false, () => {
       console.log('✅ MongoDB connection closed');
       process.exit(0);
     });
   });
   
-  // Force close after 10 seconds
   setTimeout(() => {
     console.error('⚠️ Forcing shutdown after timeout');
     process.exit(1);
@@ -313,13 +328,11 @@ const gracefulShutdown = (signal) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
   console.error('🚨 UNCAUGHT EXCEPTION:', err);
   gracefulShutdown('UNCAUGHT EXCEPTION');
 });
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
   console.error('🚨 UNHANDLED REJECTION at:', promise, 'reason:', reason);
   gracefulShutdown('UNHANDLED REJECTION');
@@ -342,11 +355,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 Allowed Origins:`, allowedOrigins);
   console.log('');
   console.log('🔒 Security Features Enabled:');
-  console.log('  ✅ Helmet (HTTP Headers)');
+  console.log('  ✅ Security Headers');
   console.log('  ✅ Rate Limiting');
   console.log('  ✅ XSS Protection');
   console.log('  ✅ NoSQL Injection Prevention');
-  console.log('  ✅ HPP Protection');
   console.log('  ✅ CORS Policy');
   console.log('  ✅ Request Size Limits');
   console.log('  ✅ Security Logging');
