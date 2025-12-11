@@ -16,6 +16,14 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+
+    <meta http-equiv="Content-Security-Policy" 
+      content="default-src 'self'; 
+               script-src 'self'; 
+               style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
+               font-src 'self' https://fonts.gstatic.com; 
+               img-src 'self' data: https:; 
+               connect-src 'self' https://gym-management-app-backend-sevs.onrender.com;">
     
     <!-- CRITICAL: Paystack Inline JS - Must be loaded for payments to work -->
     <script src="https://js.paystack.co/v1/inline.js"></script>
