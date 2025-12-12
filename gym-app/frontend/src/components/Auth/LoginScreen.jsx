@@ -34,6 +34,16 @@ const LoginScreen = () => {
     }
   };
 
+  // Temporary fix - remove in production
+const clearRateLimit = async () => {
+  try {
+    await API.post('/clear-rate-limit');
+    alert('Rate limit cleared! Try logging in again.');
+  } catch (err) {
+    console.error(err);
+  }
+};
+
   const handleResend = async () => {
     if (!email) {
       setResendMsg('Please enter your email address first');
