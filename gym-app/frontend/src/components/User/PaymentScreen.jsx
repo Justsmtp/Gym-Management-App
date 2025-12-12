@@ -39,169 +39,143 @@ const PaymentScreen = () => {
 
   const formatAmount = (kobo) => (kobo / 100).toLocaleString();
 
-  // Paystack payment handler - FIXED VERSION
-  const handlePaystackPayment = () => {
-    console.log('🔍 Starting Paystack payment...');
+  // ----------------------------
+  // Paystack payment handler
+  // ----------------------------
+  const handlePaystackPayment = async () => {
+    setLoading(true);
     setError(null);
 
     try {
-      // Validation checks
       if (typeof window.PaystackPop === 'undefined') {
         setError('Paystack not loaded. Please refresh the page.');
+        setLoading(false);
         return;
       }
 
       if (!currentUser || !currentUser.email) {
         setError('User information missing. Please logout and login again.');
+        setLoading(false);
         return;
       }
 
       if (!totalAmount || totalAmount <= 0) {
         setError('Invalid payment amount.');
+        setLoading(false);
         return;
       }
 
-      console.log('✅ Validation passed');
-      console.log('📊 Payment details:', {
+      console.log('🔍 Initiating backend payment...');
+
+      // Step 1: Initiate payment on backend
+      const initResponse = await API.post('/payments/initiate', {
+        userId: currentUser._id,
         email: currentUser.email,
-        amount: totalAmount,
-        plan: currentPlan.name,
-        trainer: addTrainer,
+        amount: totalAmount, // in kobo
+        membershipType: currentPlan.name,
+        duration: currentPlan.duration,
       });
 
-      const paymentRef = `GYM-${currentUser._id || currentUser.id}-${Date.now()}`;
+      const backendPayment = initResponse.data.payment;
+      if (!backendPayment || !backendPayment.paystackReference) {
+        throw new Error('Failed to get backend payment reference');
+      }
 
-      // Initialize Paystack
+      console.log('✅ Backend payment initiated:', backendPayment);
+
+      // Step 2: Open Paystack popup
       const handler = window.PaystackPop.setup({
         key: paystackConfig.publicKey,
         email: currentUser.email,
         amount: totalAmount,
         currency: 'NGN',
-        ref: paymentRef,
+        ref: backendPayment.paystackReference,
         metadata: {
           custom_fields: [
-            {
-              display_name: 'Membership Type',
-              variable_name: 'membership_type',
-              value: currentPlan.name,
-            },
-            {
-              display_name: 'Duration',
-              variable_name: 'duration',
-              value: `${currentPlan.duration} days`,
-            },
-            {
-              display_name: 'Trainer Add-on',
-              variable_name: 'trainer_addon',
-              value: addTrainer ? 'Yes' : 'No',
-            },
+            { display_name: 'Membership Type', variable_name: 'membership_type', value: currentPlan.name },
+            { display_name: 'Duration', variable_name: 'duration', value: `${currentPlan.duration} days` },
+            { display_name: 'Trainer Add-on', variable_name: 'trainer_addon', value: addTrainer ? 'Yes' : 'No' },
           ],
         },
-        callback: (response) => {
-          console.log('✅ Paystack payment successful:', response);
-          setLoading(true);
+        callback: async (response) => {
+          console.log('💳 Paystack payment completed:', response);
 
-          // Verify payment with backend
-          API.post('/payments/verify', {
-            reference: response.reference,
-            membershipType: currentPlan.name,
-            amount: totalAmount,
-            duration: currentPlan.duration,
-            trainerAddon: addTrainer,
-          })
-            .then((verifyResponse) => {
-              console.log('✅ Verification successful:', verifyResponse.data);
-              
-              // Update local user state with new membership data
-              if (verifyResponse.data.success && verifyResponse.data.user) {
-                const updatedUser = {
-                  ...currentUser,
-                  ...verifyResponse.data.user
-                };
-                
-                console.log('📝 Updating user state:', updatedUser);
-                setCurrentUser(updatedUser);
-                localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-              }
-              
-              // Show success screen
-              setPaymentSuccess(true);
-              setLoading(false);
-            })
-            .catch((verifyError) => {
-              console.error('❌ Verification error:', verifyError);
-              console.error('Error response:', verifyError.response?.data);
-              
-              setLoading(false);
-              
-              const errorMessage = verifyError.response?.data?.message || 'Unknown error occurred';
-              
-              alert(
-                '⚠️ Payment successful but verification failed.\n\n' +
-                'Error: ' + errorMessage + '\n\n' +
-                'Reference: ' + response.reference + '\n\n' +
-                'Please contact support or try refreshing your dashboard.'
-              );
-              
-              // Still redirect to dashboard after 3 seconds
-              setTimeout(() => {
-                setCurrentScreen('userDashboard');
-              }, 3000);
+          try {
+            // Step 3: Verify payment with backend
+            const verifyResponse = await API.post('/payments/verify', {
+              reference: backendPayment.paystackReference,
             });
+
+            console.log('✅ Verification successful:', verifyResponse.data);
+
+            if (verifyResponse.data.success && verifyResponse.data.user) {
+              const updatedUser = { ...currentUser, ...verifyResponse.data.user };
+              setCurrentUser(updatedUser);
+              localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+            }
+
+            setPaymentSuccess(true);
+            setLoading(false);
+          } catch (verifyError) {
+            console.error('❌ Verification error:', verifyError);
+            const errorMessage = verifyError.response?.data?.message || 'Unknown error';
+            alert(
+              'Payment succeeded but verification failed.\n\n' +
+              'Error: ' + errorMessage + '\n\n' +
+              'Reference: ' + backendPayment.paystackReference +
+              '\nPlease contact support.'
+            );
+            setLoading(false);
+            setCurrentScreen('userDashboard');
+          }
         },
         onClose: () => {
           console.log('ℹ️ Payment window closed');
-          if (!loading) {
-            alert('Payment cancelled. Click "Pay" to try again.');
-          }
+          if (!paymentSuccess) alert('Payment cancelled. Click "Pay" to try again.');
+          setLoading(false);
         },
       });
 
-      console.log('🚀 Opening Paystack window...');
+      console.log('🚀 Opening Paystack iframe...');
       handler.openIframe();
 
     } catch (err) {
-      console.error('❌ Paystack error:', err);
-      setError('Failed to initialize payment: ' + err.message);
+      console.error('❌ Paystack initiation error:', err);
+      setError('Failed to initiate payment: ' + err.message);
+      setLoading(false);
     }
   };
 
+  // ----------------------------
   // Cash payment handler
+  // ----------------------------
   const handleCashPayment = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      console.log('💵 Processing cash payment...');
-      
-      const response = await API.post('/payments', {
+      console.log('💵 Recording cash payment...');
+
+      const response = await API.post('/payments/cash', {
+        userId: currentUser._id,
         amount: totalAmount / 100, // Convert kobo to naira
         membershipType: currentPlan.name,
-        paymentMethod: 'Cash',
         duration: currentPlan.duration,
         trainerAddon: addTrainer,
       });
 
       console.log('✅ Cash payment response:', response.data);
 
-      // Update local user state
       if (response.data.success && response.data.user) {
-        const updatedUser = {
-          ...currentUser,
-          ...response.data.user
-        };
-        
+        const updatedUser = { ...currentUser, ...response.data.user };
         setCurrentUser(updatedUser);
         localStorage.setItem('currentUser', JSON.stringify(updatedUser));
       }
 
       setPaymentSuccess(true);
       setLoading(false);
-      
     } catch (error) {
       console.error('❌ Cash payment error:', error);
-      console.error('Error response:', error.response?.data);
-      
       const errorMessage = error.response?.data?.message || 'Failed to record payment';
       setError(errorMessage);
       alert('Failed to record payment: ' + errorMessage);
@@ -209,7 +183,10 @@ const PaymentScreen = () => {
     }
   };
 
-  // Success Screen
+  // ----------------------------
+  // Render
+  // ----------------------------
+
   if (paymentSuccess) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 md:p-6">
@@ -221,10 +198,7 @@ const PaymentScreen = () => {
           <p className="text-sm text-green-600 font-semibold mb-2">✓ Personal Trainer included</p>
         )}
         <button
-          onClick={() => {
-            console.log('🔄 Redirecting to dashboard...');
-            setCurrentScreen('userDashboard');
-          }}
+          onClick={() => setCurrentScreen('userDashboard')}
           className="mt-6 bg-black text-white py-3 px-6 md:px-8 rounded-full font-semibold hover:bg-gray-800 transition text-sm md:text-base"
         >
           Back to Dashboard
@@ -233,7 +207,6 @@ const PaymentScreen = () => {
     );
   }
 
-  // Loading Screen
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 md:p-6">
@@ -261,7 +234,6 @@ const PaymentScreen = () => {
       </div>
 
       <div className="max-w-4xl mx-auto p-4 md:p-6">
-        {/* Error Display */}
         {error && (
           <div className="mb-4 p-3 md:p-4 bg-red-50 border-2 border-red-200 rounded-xl">
             <p className="text-sm font-semibold text-red-800">⚠️ Payment Error:</p>
@@ -275,7 +247,6 @@ const PaymentScreen = () => {
           </div>
         )}
 
-        {/* Paystack Loading Warning */}
         {!paystackLoaded && (
           <div className="mb-4 p-3 md:p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
             <p className="text-sm font-semibold text-yellow-800">⚠️ Loading payment system...</p>
@@ -307,9 +278,7 @@ const PaymentScreen = () => {
                 <p className="text-xl md:text-2xl font-bold text-black mb-1">
                   ₦{formatAmount(membershipPlans[key].amount)}
                 </p>
-                <p className="text-xs text-gray-600 mb-2">
-                  {membershipPlans[key].duration} Days
-                </p>
+                <p className="text-xs text-gray-600 mb-2">{membershipPlans[key].duration} Days</p>
                 <p className="text-xs text-gray-500">{membershipPlans[key].description}</p>
               </button>
             ))}
