@@ -47,63 +47,75 @@ const PaymentScreen = () => {
     setError(null);
 
     try {
+      console.log('🔍 Starting Paystack payment...');
+
       if (typeof window.PaystackPop === 'undefined') {
-        setError('Paystack not loaded. Please refresh the page.');
-        setLoading(false);
-        return;
+        throw new Error('Paystack not loaded. Please refresh the page.');
       }
 
       if (!currentUser || !currentUser.email) {
-        setError('User information missing. Please logout and login again.');
-        setLoading(false);
-        return;
+        throw new Error('User information missing. Please logout and login again.');
       }
 
       if (!totalAmount || totalAmount <= 0) {
-        setError('Invalid payment amount.');
-        setLoading(false);
-        return;
+        throw new Error('Invalid payment amount.');
       }
 
-      console.log('🔍 Initiating backend payment...');
-
-      // Step 1: Initiate payment on backend
-      const initResponse = await API.post('/payments/initiate', {
-        userId: currentUser._id,
+      // CRITICAL: Use backend type (name) not displayName
+      const backendMembershipType = currentPlan.name; // e.g., "Walk-in" not "Walk-in Membership Access"
+      
+      console.log('✅ Validation passed');
+      console.log('📊 Payment details:', {
+        displayName: currentPlan.displayName,
+        backendType: backendMembershipType,
         email: currentUser.email,
-        amount: totalAmount, // in kobo
-        membershipType: currentPlan.value,
-        duration: currentPlan.duration,
+        amount: totalAmount,
+        trainer: addTrainer
       });
 
-      const backendPayment = initResponse.data.payment;
-      if (!backendPayment || !backendPayment.paystackReference) {
-        throw new Error('Failed to get backend payment reference');
-      }
+      // Generate reference
+      const reference = `GYM-${currentUser._id}-${Date.now()}`;
+      
+      console.log('🚀 Opening Paystack window...');
 
-      console.log('✅ Backend payment initiated:', backendPayment);
-
-      // Step 2: Open Paystack popup
+      // Open Paystack popup
       const handler = window.PaystackPop.setup({
         key: paystackConfig.publicKey,
         email: currentUser.email,
         amount: totalAmount,
         currency: 'NGN',
-        ref: backendPayment.paystackReference,
+        ref: reference,
         metadata: {
           custom_fields: [
-            { display_name: 'Membership Type', variable_name: 'membership_type', value: currentPlan.name },
-            { display_name: 'Duration', variable_name: 'duration', value: `${currentPlan.duration} days` },
-            { display_name: 'Trainer Add-on', variable_name: 'trainer_addon', value: addTrainer ? 'Yes' : 'No' },
+            { 
+              display_name: 'Membership Type', 
+              variable_name: 'membership_type', 
+              value: backendMembershipType // Use backend type
+            },
+            { 
+              display_name: 'Duration', 
+              variable_name: 'duration', 
+              value: `${currentPlan.duration} days` 
+            },
+            { 
+              display_name: 'Trainer Add-on', 
+              variable_name: 'trainer_addon', 
+              value: addTrainer ? 'Yes' : 'No' 
+            },
           ],
         },
         callback: async (response) => {
-          console.log('💳 Paystack payment completed:', response);
+          console.log('✅ Payment successful:', response);
 
           try {
-            // Step 3: Verify payment with backend
+            // Verify payment with backend - USE BACKEND TYPE
+            console.log('🔍 Verifying payment with backend...');
             const verifyResponse = await API.post('/payments/verify', {
-              reference: backendPayment.paystackReference,
+              reference: response.reference,
+              membershipType: backendMembershipType, // CRITICAL: Use backend type
+              amount: totalAmount,
+              duration: currentPlan.duration,
+              trainerAddon: addTrainer
             });
 
             console.log('✅ Verification successful:', verifyResponse.data);
@@ -118,30 +130,33 @@ const PaymentScreen = () => {
             setLoading(false);
           } catch (verifyError) {
             console.error('❌ Verification error:', verifyError);
-            const errorMessage = verifyError.response?.data?.message || 'Unknown error';
+            const errorMessage = verifyError.response?.data?.message || verifyError.message || 'Unknown error';
+            
             alert(
-              'Payment succeeded but verification failed.\n\n' +
+              '⚠️ Payment succeeded but verification failed.\n\n' +
               'Error: ' + errorMessage + '\n\n' +
-              'Reference: ' + backendPayment.paystackReference +
-              '\nPlease contact support.'
+              'Reference: ' + response.reference +
+              '\n\nPlease contact support with this reference number.'
             );
+            
             setLoading(false);
             setCurrentScreen('userDashboard');
           }
         },
         onClose: () => {
           console.log('ℹ️ Payment window closed');
-          if (!paymentSuccess) alert('Payment cancelled. Click "Pay" to try again.');
+          if (!paymentSuccess) {
+            alert('Payment cancelled. Click "Pay" to try again.');
+          }
           setLoading(false);
         },
       });
 
-      console.log('🚀 Opening Paystack iframe...');
       handler.openIframe();
 
     } catch (err) {
       console.error('❌ Paystack initiation error:', err);
-      setError('Failed to initiate payment: ' + err.message);
+      setError(err.message || 'Failed to initiate payment');
       setLoading(false);
     }
   };
@@ -156,10 +171,13 @@ const PaymentScreen = () => {
     try {
       console.log('💵 Recording cash payment...');
 
-      const response = await API.post('/payments/cash', {
-        userId: currentUser._id,
+      // CRITICAL: Use backend type
+      const backendMembershipType = currentPlan.name;
+
+      const response = await API.post('/payments', {
         amount: totalAmount / 100, // Convert kobo to naira
-        membershipType: currentPlan.value,
+        membershipType: backendMembershipType, // Use backend type
+        paymentMethod: 'Cash',
         duration: currentPlan.duration,
         trainerAddon: addTrainer,
       });
@@ -192,7 +210,7 @@ const PaymentScreen = () => {
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 md:p-6">
         <CheckCircle size={64} className="text-green-500 mb-6 md:w-20 md:h-20" />
         <h2 className="text-2xl md:text-3xl font-bold text-black mb-4 text-center">Payment Successful!</h2>
-        <p className="text-gray-600 mb-2 text-center">Your {currentPlan.name} membership has been activated</p>
+        <p className="text-gray-600 mb-2 text-center">Your {currentPlan.displayName} has been activated</p>
         <p className="text-sm text-gray-500 mb-2">Duration: {currentPlan.duration} days</p>
         {addTrainer && (
           <p className="text-sm text-green-600 font-semibold mb-2">✓ Personal Trainer included</p>
@@ -272,7 +290,7 @@ const PaymentScreen = () => {
                 }`}
               >
                 <div className="flex justify-between items-start mb-2">
-                  <span className="font-bold text-sm">{membershipPlans[key].name}</span>
+                  <span className="font-bold text-sm">{membershipPlans[key].displayName}</span>
                   {selectedPlan === key && <CheckCircle size={18} className="text-black md:w-5 md:h-5" />}
                 </div>
                 <p className="text-xl md:text-2xl font-bold text-black mb-1">
@@ -309,7 +327,7 @@ const PaymentScreen = () => {
             <div className="flex justify-between items-center mb-2">
               <div>
                 <p className="text-xs md:text-sm text-gray-600">Selected Plan:</p>
-                <p className="text-base md:text-lg font-bold text-black">{currentPlan.name}</p>
+                <p className="text-base md:text-lg font-bold text-black">{currentPlan.displayName}</p>
               </div>
               <div className="text-right">
                 <p className="text-xs md:text-sm text-gray-600">Plan Price:</p>
