@@ -64,7 +64,8 @@ const rateLimit = (max, windowMs) => {
     if (recentRequests.length >= max) {
       return res.status(429).json({
         error: 'Too many requests',
-        message: 'Please try again later'
+        message: 'Please try again later',
+        retryAfter: Math.ceil(windowMs / 1000) // seconds until reset
       });
     }
     
@@ -257,22 +258,23 @@ const adminAuthLimiter = rateLimit(
   RATE_LIMIT_CONFIG.adminLogin.windowMs
 );
 
-// Middleware to detect admin login attempts
+// IMPROVED: Middleware to detect admin login attempts
 const adminLoginProtection = (req, res, next) => {
-  const { email } = req.body;
+  const { email, isAdmin } = req.body;
   
-  // Check if it's an admin email (you can customize this logic)
-  const isAdminEmail = email && (
+  // Check BOTH the isAdmin flag AND email pattern
+  const isAdminAttempt = isAdmin === true || (email && (
     email.toLowerCase().includes('admin') || 
     email.toLowerCase() === process.env.ADMIN_EMAIL
-  );
+  ));
   
-  if (isAdminEmail) {
+  if (isAdminAttempt) {
     console.log(`🔒 Admin login attempt detected: ${email} - applying strict rate limit`);
     // Apply strict admin rate limit
     return adminAuthLimiter(req, res, next);
   }
   
+  console.log(`👤 User login attempt: ${email} - applying lenient rate limit`);
   // Apply lenient user rate limit
   return userAuthLimiter(req, res, next);
 };
