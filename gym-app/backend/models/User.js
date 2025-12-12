@@ -61,6 +61,14 @@ const userSchema = new mongoose.Schema({
     type: Date
   },
   
+  // Payment & Activation Fields - ADDED
+  activationDate: {
+    type: Date
+  },
+  lastPaymentDate: {
+    type: Date
+  },
+  
   // Account Status
   status: {
     type: String,
