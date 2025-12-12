@@ -72,7 +72,7 @@ const PaymentScreen = () => {
         userId: currentUser._id,
         email: currentUser.email,
         amount: totalAmount, // in kobo
-        membershipType: currentPlan.name,
+        membershipType: currentPlan.value,
         duration: currentPlan.duration,
       });
 
@@ -159,7 +159,7 @@ const PaymentScreen = () => {
       const response = await API.post('/payments/cash', {
         userId: currentUser._id,
         amount: totalAmount / 100, // Convert kobo to naira
-        membershipType: currentPlan.name,
+        membershipType: currentPlan.value,
         duration: currentPlan.duration,
         trainerAddon: addTrainer,
       });
