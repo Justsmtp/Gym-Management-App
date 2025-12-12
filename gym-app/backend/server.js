@@ -227,8 +227,12 @@ const usersRoutes = require('./routes/users');
 const remindersRoutes = require('./routes/reminders');
 const plansRoutes = require('./routes/plans');
 
-// Stricter rate limit for auth routes
-const authLimiter = rateLimit(5, 15 * 60 * 1000); // 5 attempts per 15 minutes
+// Stricter rate limit for auth routes (adjusted for development)
+const isDevelopment = process.env.NODE_ENV === 'development';
+const authLimiter = rateLimit(
+  isDevelopment ? 50 : 10, // 50 attempts in dev, 10 in production
+  isDevelopment ? 5 * 60 * 1000 : 15 * 60 * 1000 // 5 min in dev, 15 min in production
+);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
@@ -252,6 +256,30 @@ app.get('/api/health', (req, res) => {
     mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     environment: process.env.NODE_ENV || 'development'
   });
+});
+
+// Clear rate limit for specific IP (development only)
+app.post('/api/clear-rate-limit', (req, res) => {
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(403).json({ error: 'Not allowed in production' });
+  }
+  
+  const { ip } = req.body;
+  const targetIp = ip || req.ip || req.connection.remoteAddress;
+  
+  if (rateLimitStore.has(targetIp)) {
+    rateLimitStore.delete(targetIp);
+    console.log(`✅ Cleared rate limit for IP: ${targetIp}`);
+    res.json({ 
+      success: true, 
+      message: `Rate limit cleared for ${targetIp}` 
+    });
+  } else {
+    res.json({ 
+      success: true, 
+      message: `No rate limit found for ${targetIp}` 
+    });
+  }
 });
 
 app.get('/', (req, res) => {
