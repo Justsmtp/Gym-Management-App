@@ -162,6 +162,19 @@ router.post('/verify', auth, async (req, res) => {
     
     const membershipDays = getDuration(membershipType, duration);
     console.log('📅 Membership duration:', membershipDays, 'days');
+    console.log('🔍 CRITICAL - Received membershipType:', membershipType);
+    console.log('🔍 Expected enum values: Walk-in, Weekly, Deluxe, Bi-Monthly');
+    
+    // VALIDATION: Check if membershipType matches enum
+    const validTypes = ['Walk-in', 'Weekly', 'Deluxe', 'Bi-Monthly'];
+    if (!validTypes.includes(membershipType)) {
+      console.error('❌ INVALID membershipType received:', membershipType);
+      console.error('❌ Valid types are:', validTypes);
+      return res.status(400).json({
+        success: false,
+        message: `Invalid membershipType: "${membershipType}". Valid types are: ${validTypes.join(', ')}`
+      });
+    }
 
     let payment = existingPayment;
 
