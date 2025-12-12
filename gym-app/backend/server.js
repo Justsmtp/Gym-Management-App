@@ -48,10 +48,25 @@ app.use((req, res, next) => {
 // Rate limiting storage (in-memory, simple implementation)
 const rateLimitStore = new Map();
 
+// Whitelist IPs (for development/trusted IPs)
+const RATE_LIMIT_WHITELIST = [
+  '127.0.0.1',
+  '::1',
+  'localhost',
+  ...(process.env.RATE_LIMIT_WHITELIST || '').split(',').filter(Boolean)
+];
+
 // Simple rate limiter middleware
 const rateLimit = (max, windowMs) => {
   return (req, res, next) => {
     const ip = req.ip || req.connection.remoteAddress;
+    
+    // Bypass rate limiting for whitelisted IPs
+    if (RATE_LIMIT_WHITELIST.some(whiteIp => ip.includes(whiteIp))) {
+      console.log(`✅ Rate limit bypassed for whitelisted IP: ${ip}`);
+      return next();
+    }
+    
     const now = Date.now();
     
     if (!rateLimitStore.has(ip)) {
@@ -62,6 +77,7 @@ const rateLimit = (max, windowMs) => {
     const recentRequests = requests.filter(time => now - time < windowMs);
     
     if (recentRequests.length >= max) {
+      console.log(`❌ Rate limit exceeded for IP: ${ip} (${recentRequests.length}/${max} requests)`);
       return res.status(429).json({
         error: 'Too many requests',
         message: 'Please try again later',
@@ -248,7 +264,9 @@ const usersRoutes = require('./routes/users');
 const remindersRoutes = require('./routes/reminders');
 const plansRoutes = require('./routes/plans');
 
-// Rate limiters with different strictness levels
+// NO RATE LIMITING ON LOGIN - Completely disabled
+// If you want to re-enable rate limiting in the future, uncomment the code below:
+/*
 const userAuthLimiter = rateLimit(
   RATE_LIMIT_CONFIG.userLogin.max, 
   RATE_LIMIT_CONFIG.userLogin.windowMs
@@ -258,29 +276,26 @@ const adminAuthLimiter = rateLimit(
   RATE_LIMIT_CONFIG.adminLogin.windowMs
 );
 
-// IMPROVED: Middleware to detect admin login attempts
 const adminLoginProtection = (req, res, next) => {
   const { email, isAdmin } = req.body;
-  
-  // Check BOTH the isAdmin flag AND email pattern
   const isAdminAttempt = isAdmin === true || (email && (
     email.toLowerCase().includes('admin') || 
     email.toLowerCase() === process.env.ADMIN_EMAIL
   ));
   
   if (isAdminAttempt) {
-    console.log(`🔒 Admin login attempt detected: ${email} - applying strict rate limit`);
-    // Apply strict admin rate limit
+    console.log(`🔒 Admin login attempt detected: ${email}`);
     return adminAuthLimiter(req, res, next);
   }
   
-  console.log(`👤 User login attempt: ${email} - applying lenient rate limit`);
-  // Apply lenient user rate limit
+  console.log(`👤 User login attempt: ${email}`);
   return userAuthLimiter(req, res, next);
 };
 
-// Apply smart rate limiting only to login routes
 app.use('/api/auth/login', adminLoginProtection);
+*/
+
+console.log('⚠️ Login rate limiting is DISABLED');
 
 // Very lenient rate limit for registration (we want users to sign up easily)
 const registerLimiter = rateLimit(
@@ -311,27 +326,52 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Clear rate limit for specific IP (development only)
+// Clear rate limit for specific IP (now works in all environments with secret key)
 app.post('/api/clear-rate-limit', (req, res) => {
-  if (process.env.NODE_ENV !== 'development') {
-    return res.status(403).json({ error: 'Not allowed in production' });
+  const secretKey = process.env.RATE_LIMIT_CLEAR_SECRET || 'dev-secret-123';
+  const providedSecret = req.body.secret || req.headers['x-rate-limit-secret'];
+  
+  // In development, allow without secret
+  if (process.env.NODE_ENV === 'development' || providedSecret === secretKey) {
+    const { ip } = req.body;
+    const targetIp = ip || req.ip || req.connection.remoteAddress;
+    
+    if (rateLimitStore.has(targetIp)) {
+      rateLimitStore.delete(targetIp);
+      console.log(`✅ Cleared rate limit for IP: ${targetIp}`);
+      res.json({ 
+        success: true, 
+        message: `Rate limit cleared for ${targetIp}` 
+      });
+    } else {
+      res.json({ 
+        success: true, 
+        message: `No rate limit found for ${targetIp}` 
+      });
+    }
+  } else {
+    res.status(403).json({ 
+      error: 'Invalid secret key',
+      message: 'Provide the correct secret in request body or header' 
+    });
   }
+});
+
+// Clear ALL rate limits (development only)
+app.post('/api/clear-all-rate-limits', (req, res) => {
+  const secretKey = process.env.RATE_LIMIT_CLEAR_SECRET || 'dev-secret-123';
+  const providedSecret = req.body.secret || req.headers['x-rate-limit-secret'];
   
-  const { ip } = req.body;
-  const targetIp = ip || req.ip || req.connection.remoteAddress;
-  
-  if (rateLimitStore.has(targetIp)) {
-    rateLimitStore.delete(targetIp);
-    console.log(`✅ Cleared rate limit for IP: ${targetIp}`);
+  if (process.env.NODE_ENV === 'development' || providedSecret === secretKey) {
+    const count = rateLimitStore.size;
+    rateLimitStore.clear();
+    console.log(`✅ Cleared all rate limits (${count} entries)`);
     res.json({ 
       success: true, 
-      message: `Rate limit cleared for ${targetIp}` 
+      message: `Cleared ${count} rate limit entries` 
     });
   } else {
-    res.json({ 
-      success: true, 
-      message: `No rate limit found for ${targetIp}` 
-    });
+    res.status(403).json({ error: 'Not allowed' });
   }
 });
 
@@ -437,10 +477,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('🔒 Security Features Enabled:');
   console.log('  ✅ Security Headers');
-  console.log('  ✅ Smart Rate Limiting:');
+  console.log('  ⚠️  Rate Limiting:');
   console.log(`     - General API: ${RATE_LIMIT_CONFIG.general.max} req/15min`);
-  console.log(`     - User Login: ${RATE_LIMIT_CONFIG.userLogin.max} req/5min`);
-  console.log(`     - Admin Login: ${RATE_LIMIT_CONFIG.adminLogin.max} req/15min`);
+  console.log(`     - User Login: DISABLED (unlimited)`);
+  console.log(`     - Admin Login: DISABLED (unlimited)`);
   console.log(`     - Registration: ${RATE_LIMIT_CONFIG.register.max} req/5min`);
   console.log('  ✅ XSS Protection');
   console.log('  ✅ NoSQL Injection Prevention');
