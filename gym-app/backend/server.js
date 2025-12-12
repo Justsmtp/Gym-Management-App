@@ -12,6 +12,26 @@ const app = express();
 // BASIC SECURITY MIDDLEWARE (No new packages)
 // ============================================
 
+// Configuration
+const RATE_LIMIT_CONFIG = {
+  general: {
+    max: parseInt(process.env.GENERAL_RATE_LIMIT) || 200,
+    windowMs: 15 * 60 * 1000 // 15 minutes
+  },
+  userLogin: {
+    max: parseInt(process.env.USER_LOGIN_RATE_LIMIT) || 20,
+    windowMs: 5 * 60 * 1000 // 5 minutes
+  },
+  adminLogin: {
+    max: parseInt(process.env.ADMIN_LOGIN_RATE_LIMIT) || 5,
+    windowMs: 15 * 60 * 1000 // 15 minutes
+  },
+  register: {
+    max: parseInt(process.env.REGISTER_RATE_LIMIT) || 10,
+    windowMs: 5 * 60 * 1000 // 5 minutes
+  }
+};
+
 // Security headers
 app.use((req, res, next) => {
   // Prevent clickjacking
@@ -69,8 +89,8 @@ setInterval(() => {
   }
 }, 60000);
 
-// Apply general rate limiting
-app.use(rateLimit(100, 15 * 60 * 1000)); // 100 requests per 15 minutes
+// Apply general rate limiting (very lenient for general API)
+app.use(rateLimit(RATE_LIMIT_CONFIG.general.max, RATE_LIMIT_CONFIG.general.windowMs));
 
 // NoSQL Injection Prevention (manual implementation)
 const sanitizeData = (data) => {
@@ -227,14 +247,45 @@ const usersRoutes = require('./routes/users');
 const remindersRoutes = require('./routes/reminders');
 const plansRoutes = require('./routes/plans');
 
-// Stricter rate limit for auth routes (adjusted for development)
-const isDevelopment = process.env.NODE_ENV === 'development';
-const authLimiter = rateLimit(
-  isDevelopment ? 50 : 10, // 50 attempts in dev, 10 in production
-  isDevelopment ? 5 * 60 * 1000 : 15 * 60 * 1000 // 5 min in dev, 15 min in production
+// Rate limiters with different strictness levels
+const userAuthLimiter = rateLimit(
+  RATE_LIMIT_CONFIG.userLogin.max, 
+  RATE_LIMIT_CONFIG.userLogin.windowMs
 );
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/register', authLimiter);
+const adminAuthLimiter = rateLimit(
+  RATE_LIMIT_CONFIG.adminLogin.max, 
+  RATE_LIMIT_CONFIG.adminLogin.windowMs
+);
+
+// Middleware to detect admin login attempts
+const adminLoginProtection = (req, res, next) => {
+  const { email } = req.body;
+  
+  // Check if it's an admin email (you can customize this logic)
+  const isAdminEmail = email && (
+    email.toLowerCase().includes('admin') || 
+    email.toLowerCase() === process.env.ADMIN_EMAIL
+  );
+  
+  if (isAdminEmail) {
+    console.log(`🔒 Admin login attempt detected: ${email} - applying strict rate limit`);
+    // Apply strict admin rate limit
+    return adminAuthLimiter(req, res, next);
+  }
+  
+  // Apply lenient user rate limit
+  return userAuthLimiter(req, res, next);
+};
+
+// Apply smart rate limiting only to login routes
+app.use('/api/auth/login', adminLoginProtection);
+
+// Very lenient rate limit for registration (we want users to sign up easily)
+const registerLimiter = rateLimit(
+  RATE_LIMIT_CONFIG.register.max, 
+  RATE_LIMIT_CONFIG.register.windowMs
+);
+app.use('/api/auth/register', registerLimiter);
 
 // Register Routes
 app.use('/api/auth', authRoutes);
@@ -384,7 +435,11 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('🔒 Security Features Enabled:');
   console.log('  ✅ Security Headers');
-  console.log('  ✅ Rate Limiting');
+  console.log('  ✅ Smart Rate Limiting:');
+  console.log(`     - General API: ${RATE_LIMIT_CONFIG.general.max} req/15min`);
+  console.log(`     - User Login: ${RATE_LIMIT_CONFIG.userLogin.max} req/5min`);
+  console.log(`     - Admin Login: ${RATE_LIMIT_CONFIG.adminLogin.max} req/15min`);
+  console.log(`     - Registration: ${RATE_LIMIT_CONFIG.register.max} req/5min`);
   console.log('  ✅ XSS Protection');
   console.log('  ✅ NoSQL Injection Prevention');
   console.log('  ✅ CORS Policy');
