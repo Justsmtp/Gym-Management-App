@@ -210,7 +210,9 @@ const PaymentScreen = () => {
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 md:p-6">
         <CheckCircle size={64} className="text-green-500 mb-6 md:w-20 md:h-20" />
         <h2 className="text-2xl md:text-3xl font-bold text-black mb-4 text-center">Payment Successful!</h2>
-        <p className="text-gray-600 mb-2 text-center">Your {currentPlan.displayName} has been activated</p>
+        <p className="text-gray-600 mb-2 text-center">
+          Your {currentPlan.displayName || currentPlan.name} has been activated
+        </p>
         <p className="text-sm text-gray-500 mb-2">Duration: {currentPlan.duration} days</p>
         {addTrainer && (
           <p className="text-sm text-green-600 font-semibold mb-2">✓ Personal Trainer included</p>
@@ -279,27 +281,32 @@ const PaymentScreen = () => {
           <h3 className="text-lg md:text-xl font-bold text-black mb-4">Choose Your Plan</h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-            {Object.keys(membershipPlans).map((key) => (
-              <button
-                key={key}
-                onClick={() => setSelectedPlan(key)}
-                className={`border-2 rounded-xl p-3 md:p-4 text-left transition ${
-                  selectedPlan === key
-                    ? 'border-black bg-gray-50 shadow-md'
-                    : 'border-gray-300 hover:border-black'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <span className="font-bold text-sm">{membershipPlans[key].displayName}</span>
-                  {selectedPlan === key && <CheckCircle size={18} className="text-black md:w-5 md:h-5" />}
-                </div>
-                <p className="text-xl md:text-2xl font-bold text-black mb-1">
-                  ₦{formatAmount(membershipPlans[key].amount)}
-                </p>
-                <p className="text-xs text-gray-600 mb-2">{membershipPlans[key].duration} Days</p>
-                <p className="text-xs text-gray-500">{membershipPlans[key].description}</p>
-              </button>
-            ))}
+            {Object.keys(membershipPlans).map((key) => {
+              const plan = membershipPlans[key];
+              const displayText = plan.displayName || plan.name; // Fallback to name if no displayName
+              
+              return (
+                <button
+                  key={key}
+                  onClick={() => setSelectedPlan(key)}
+                  className={`border-2 rounded-xl p-3 md:p-4 text-left transition ${
+                    selectedPlan === key
+                      ? 'border-black bg-gray-50 shadow-md'
+                      : 'border-gray-300 hover:border-black'
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-bold text-sm">{displayText}</span>
+                    {selectedPlan === key && <CheckCircle size={18} className="text-black md:w-5 md:h-5" />}
+                  </div>
+                  <p className="text-xl md:text-2xl font-bold text-black mb-1">
+                    ₦{formatAmount(plan.amount)}
+                  </p>
+                  <p className="text-xs text-gray-600 mb-2">{plan.duration} Days</p>
+                  <p className="text-xs text-gray-500">{plan.description}</p>
+                </button>
+              );
+            })}
           </div>
 
           {/* Trainer Add-on */}
@@ -327,7 +334,9 @@ const PaymentScreen = () => {
             <div className="flex justify-between items-center mb-2">
               <div>
                 <p className="text-xs md:text-sm text-gray-600">Selected Plan:</p>
-                <p className="text-base md:text-lg font-bold text-black">{currentPlan.displayName}</p>
+                <p className="text-base md:text-lg font-bold text-black">
+                  {currentPlan.displayName || currentPlan.name}
+                </p>
               </div>
               <div className="text-right">
                 <p className="text-xs md:text-sm text-gray-600">Plan Price:</p>
