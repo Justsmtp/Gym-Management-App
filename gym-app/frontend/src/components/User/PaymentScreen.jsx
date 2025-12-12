@@ -48,6 +48,10 @@ const PaymentScreen = () => {
 
     try {
       console.log('🔍 Starting Paystack payment...');
+      console.log('🔍 Selected plan key:', selectedPlan);
+      console.log('🔍 Current plan object:', currentPlan);
+      console.log('🔍 Plan name field:', currentPlan.name);
+      console.log('🔍 Plan displayName field:', currentPlan.displayName);
 
       if (typeof window.PaystackPop === 'undefined') {
         throw new Error('Paystack not loaded. Please refresh the page.');
@@ -110,6 +114,8 @@ const PaymentScreen = () => {
           try {
             // Verify payment with backend - USE BACKEND TYPE
             console.log('🔍 Verifying payment with backend...');
+            console.log('🔍 Sending membershipType:', backendMembershipType);
+            
             const verifyResponse = await API.post('/payments/verify', {
               reference: response.reference,
               membershipType: backendMembershipType, // CRITICAL: Use backend type
@@ -130,6 +136,7 @@ const PaymentScreen = () => {
             setLoading(false);
           } catch (verifyError) {
             console.error('❌ Verification error:', verifyError);
+            console.error('❌ Error response:', verifyError.response?.data);
             const errorMessage = verifyError.response?.data?.message || verifyError.message || 'Unknown error';
             
             alert(
