@@ -1,3 +1,4 @@
+/* eslint-disable no-mixed-operators */
 import React, { useState } from 'react';
 import { Loader, ArrowLeft, Mail, Lock, Shield } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
