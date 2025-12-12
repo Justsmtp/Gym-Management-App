@@ -1,410 +1,448 @@
+// backend/routes/payments.js
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const crypto = require('crypto');
 const Payment = require('../models/Payment');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 
-// Membership plan durations (in days)
+// Membership durations mapping (days)
 const membershipDurations = {
   'Walk-in': 1,
-  'Weekly': 7,
-  'Deluxe': 30,
+  'walk-in': 1,
+  Weekly: 7,
+  weekly: 7,
+  Deluxe: 30,
+  deluxe: 30,
   'Bi-Monthly': 90,
+  'bi-monthly': 90,
 };
 
-// ============================================
-// USER ROUTES - Must come before admin routes
-// ============================================
+// Helper function to get duration
+const getDuration = (membershipType, providedDuration) => {
+  if (providedDuration) return parseInt(providedDuration);
+  return membershipDurations[membershipType] || membershipDurations[membershipType.toLowerCase()] || 30;
+};
 
-// @route   GET /api/payments/my-history
-// @desc    Get current user's payment history (User)
-// CRITICAL: This must come BEFORE /api/payments/user/:userId
-router.get('/my-history', auth, async (req, res) => {
+// POST /api/payments/verify - CRITICAL FIX
+router.post('/verify', auth, async (req, res) => {
   try {
-    console.log('📋 Fetching payment history for user:', req.user.id);
-    
-    const payments = await Payment.find({ 
-      user: req.user.id,
-      status: { $in: ['completed', 'pending', 'failed'] }
-    })
-      .sort({ createdAt: -1 })
-      .select('amount membershipType paymentMethod status createdAt completedAt transactionId');
-    
-    console.log(`✅ Found ${payments.length} payments`);
-    
-    res.json({
-      success: true,
-      count: payments.length,
-      payments: payments
-    });
-  } catch (err) {
-    console.error('❌ Error fetching payment history:', err.message);
-    res.status(500).json({ 
-      success: false,
-      message: 'Server error fetching payment history',
-      error: err.message 
-    });
-  }
-});
+    const { reference, membershipType, amount, duration, trainerAddon } = req.body;
+    const userId = req.user.id;
 
-// ============================================
-// PAYMENT INITIATION & VERIFICATION
-// ============================================
-
-// @route   POST /api/payments/initiate
-// @desc    Initiate payment (for new registration or renewal)
-router.post('/initiate', async (req, res) => {
-  try {
-    const { userId, email, amount, membershipType, duration } = req.body;
-
-    console.log('💳 Initiating payment:', { userId, email, amount, membershipType });
-
-    // Validation
-    if (!userId || !email || !amount || !membershipType) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-
-    // Find user
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Generate unique transaction ID and Paystack reference
-    const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const paystackReference = `GYM-${userId}-${Date.now()}`;
-
-    // Create payment record
-    const payment = new Payment({
-      user: userId,
-      userEmail: email,
-      userName: user.name,
-      amount: amount / 100, // Convert from kobo to Naira
-      currency: 'NGN',
-      membershipType: membershipType,
-      duration: duration || membershipDurations[membershipType] || 30,
-      transactionId: transactionId,
-      paystackReference: paystackReference,
-      paymentMethod: 'Paystack',
-      status: 'pending',
-      verificationStatus: 'unverified',
-      initiatedAt: new Date(),
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes expiry
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent'],
+    console.log('===========================================');
+    console.log('🔍 PAYMENT VERIFICATION STARTED');
+    console.log('===========================================');
+    console.log('📋 Request Data:', {
+      reference,
+      membershipType,
+      amount,
+      duration,
+      trainerAddon,
+      userId
     });
 
-    await payment.save();
-
-    console.log('✅ Payment initiated:', transactionId);
-
-    res.json({
-      success: true,
-      message: 'Payment initiated successfully',
-      payment: {
-        transactionId: payment.transactionId,
-        paystackReference: payment.paystackReference,
-        amount: amount, // in kobo for Paystack
-        email: email,
-      }
-    });
-  } catch (err) {
-    console.error('❌ Payment initiation error:', err.message);
-    res.status(500).json({ message: 'Server error during payment initiation' });
-  }
-});
-
-// @route   POST /api/payments/verify
-// @desc    Verify Paystack payment and activate user
-router.post('/verify', async (req, res) => {
-  try {
-    const { reference } = req.body;
-
-    console.log('🔍 Verifying payment:', reference);
-
+    // Step 1: Validate input
     if (!reference) {
-      return res.status(400).json({ message: 'Payment reference is required' });
-    }
-
-    // Find payment record
-    const payment = await Payment.findOne({ paystackReference: reference });
-    if (!payment) {
-      return res.status(404).json({ message: 'Payment record not found' });
-    }
-
-    // Check if already verified
-    if (payment.status === 'completed' && payment.verificationStatus === 'verified') {
-      console.log('✅ Payment already verified');
-      return res.json({
-        success: true,
-        message: 'Payment already verified',
-        payment: payment
+      console.error('❌ Missing reference');
+      return res.status(400).json({
+        success: false,
+        message: 'Payment reference is required'
       });
     }
 
-    // Verify with Paystack
-    const paystackResponse = await axios.get(
-      `https://api.paystack.co/transaction/verify/${reference}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`
+    if (!membershipType || !amount) {
+      console.error('❌ Missing required fields');
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required payment information'
+      });
+    }
+
+    // Step 2: Check for duplicate
+    console.log('🔍 Checking for duplicate payment...');
+    const existingPayment = await Payment.findOne({ paystackReference: reference });
+    
+    if (existingPayment && existingPayment.status === 'completed') {
+      console.log('⚠️ Payment already verified:', reference);
+      return res.status(400).json({
+        success: false,
+        message: 'Payment already verified'
+      });
+    }
+
+    // Step 3: Get Paystack secret key
+    const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
+    
+    if (!paystackSecretKey) {
+      console.error('❌ PAYSTACK_SECRET_KEY not found in environment');
+      return res.status(500).json({
+        success: false,
+        message: 'Payment system configuration error'
+      });
+    }
+
+    // Step 4: Verify with Paystack
+    console.log('📡 Verifying with Paystack API...');
+    console.log('🔗 URL:', `https://api.paystack.co/transaction/verify/${reference}`);
+
+    let paystackData;
+    try {
+      const verifyResponse = await axios.get(
+        `https://api.paystack.co/transaction/verify/${reference}`,
+        {
+          headers: {
+            Authorization: `Bearer ${paystackSecretKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000 // 30 second timeout
         }
+      );
+
+      console.log('📥 Paystack response status:', verifyResponse.status);
+      console.log('📥 Paystack response:', JSON.stringify(verifyResponse.data, null, 2));
+
+      if (!verifyResponse.data || !verifyResponse.data.data) {
+        console.error('❌ Invalid Paystack response structure');
+        return res.status(500).json({
+          success: false,
+          message: 'Invalid response from payment provider'
+        });
       }
-    );
 
-    const transactionData = paystackResponse.data.data;
+      paystackData = verifyResponse.data.data;
 
-    if (transactionData.status === 'success') {
-      // Update payment record
+    } catch (paystackError) {
+      console.error('❌ Paystack API Error:', {
+        message: paystackError.message,
+        response: paystackError.response?.data,
+        status: paystackError.response?.status
+      });
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to verify with payment provider: ' + paystackError.message
+      });
+    }
+
+    // Step 5: Check transaction status
+    console.log('🔍 Transaction status:', paystackData.status);
+    
+    if (paystackData.status !== 'success') {
+      console.error('❌ Transaction not successful:', paystackData.status);
+      return res.status(400).json({
+        success: false,
+        message: `Payment not successful. Status: ${paystackData.status}`
+      });
+    }
+
+    // Step 6: Verify amount
+    const expectedAmount = parseInt(amount);
+    const receivedAmount = parseInt(paystackData.amount);
+    
+    console.log('💰 Amount verification:', {
+      expected: expectedAmount,
+      received: receivedAmount,
+      match: receivedAmount === expectedAmount
+    });
+
+    if (receivedAmount !== expectedAmount) {
+      console.error('❌ Amount mismatch');
+      return res.status(400).json({
+        success: false,
+        message: 'Payment amount verification failed'
+      });
+    }
+
+    console.log('✅ Paystack verification successful');
+
+    // Step 7: Create/Update payment record
+    console.log('💾 Creating payment record...');
+    
+    const membershipDays = getDuration(membershipType, duration);
+    console.log('📅 Membership duration:', membershipDays, 'days');
+
+    let payment = existingPayment;
+
+    if (!payment) {
+      payment = new Payment({
+        user: userId,
+        amount: amount / 100, // Convert kobo to naira
+        membershipType,
+        paymentMethod: 'Paystack',
+        duration: membershipDays,
+        trainerAddon: trainerAddon || false,
+        paystackReference: reference,
+        transactionId: reference,
+        status: 'completed',
+        verificationStatus: 'verified',
+        completedAt: new Date(),
+        verifiedAt: new Date(),
+        paystackData: paystackData,
+      });
+    } else {
       payment.status = 'completed';
       payment.verificationStatus = 'verified';
       payment.completedAt = new Date();
       payment.verifiedAt = new Date();
-      payment.paystackData = transactionData;
-      payment.channel = transactionData.channel;
+      payment.paystackData = paystackData;
+    }
+
+    try {
       await payment.save();
+      console.log('✅ Payment record saved:', payment._id);
+    } catch (saveError) {
+      console.error('❌ Payment save error:', saveError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to save payment record: ' + saveError.message
+      });
+    }
 
-      // Find user and activate account
-      const user = await User.findById(payment.user);
+    // Step 8: Update user membership
+    console.log('👤 Updating user membership...');
+    
+    let user;
+    try {
+      user = await User.findById(userId);
+      
       if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+        console.error('❌ User not found:', userId);
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
       }
 
-      // Generate barcode if new user
-      if (!user.barcode) {
-        const userCount = await User.countDocuments();
-        user.barcode = `GYM-2025-${String(userCount).padStart(3, '0')}`;
-      }
+      console.log('📝 Current user state:', {
+        status: user.status,
+        membershipType: user.membershipType,
+        currentEndDate: user.membershipEndDate
+      });
 
-      // Calculate membership dates
-      const startDate = user.membershipStartDate || new Date();
-      const endDate = new Date(startDate.getTime() + payment.duration * 24 * 60 * 60 * 1000);
+      // Calculate new dates
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + membershipDays);
 
-      // Update user to ACTIVE with membership dates
+      console.log('📅 New membership dates:', {
+        start: startDate,
+        end: endDate,
+        duration: membershipDays
+      });
+
+      // Update user fields
+      user.membershipType = membershipType;
       user.status = 'active';
       user.paymentStatus = 'active';
       user.isActive = true;
-      user.activationDate = new Date();
-      user.lastPaymentDate = new Date();
+      user.activationDate = startDate;
       user.membershipStartDate = startDate;
-      user.membershipEndDate = endDate;
+      user.lastPaymentDate = startDate;
       user.nextDueDate = endDate;
+      user.membershipEndDate = endDate;
+
       await user.save();
+      console.log('✅ User membership updated successfully');
 
-      console.log('✅ Payment verified and user activated');
-
-      res.json({
-        success: true,
-        message: 'Payment verified successfully. Account is now active!',
-        payment: {
-          transactionId: payment.transactionId,
-          amount: payment.amount,
-          status: payment.status,
-          completedAt: payment.completedAt
-        },
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          barcode: user.barcode,
-          status: user.status,
-          membershipType: user.membershipType,
-          membershipStartDate: user.membershipStartDate,
-          membershipEndDate: user.membershipEndDate,
-          nextDueDate: user.nextDueDate
-        }
-      });
-    } else {
-      // Payment failed
-      payment.status = 'failed';
-      payment.verificationStatus = 'failed';
-      payment.paystackData = transactionData;
-      await payment.save();
-
-      console.log('❌ Payment verification failed');
-
-      res.status(400).json({
+    } catch (userError) {
+      console.error('❌ User update error:', userError);
+      return res.status(500).json({
         success: false,
-        message: 'Payment verification failed',
-        status: transactionData.status
-      });
-    }
-  } catch (err) {
-    console.error('❌ Payment verification error:', err.message);
-    
-    if (err.response) {
-      return res.status(400).json({
-        success: false,
-        message: 'Payment verification failed with Paystack',
-        error: err.response.data.message
+        message: 'Failed to update user membership: ' + userError.message
       });
     }
 
-    res.status(500).json({ message: 'Server error during payment verification' });
-  }
-});
-
-// @route   POST /api/payments/cash
-// @desc    Record cash payment (Admin only)
-router.post('/cash', auth, async (req, res) => {
-  try {
-    const { userId, amount, membershipType, duration } = req.body;
-
-    console.log('💵 Recording cash payment for user:', userId);
-
-    // Find user making the request (must be admin)
-    const requestingUser = await User.findById(req.user.id);
-    if (!requestingUser || !requestingUser.isAdmin) {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    // Find target user
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Generate transaction ID
-    const transactionId = `CASH-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // Create payment record
-    const payment = new Payment({
-      user: userId,
-      userEmail: user.email,
-      userName: user.name,
-      amount: amount,
-      currency: 'NGN',
-      membershipType: membershipType,
-      duration: duration || membershipDurations[membershipType] || 30,
-      transactionId: transactionId,
-      paymentMethod: 'Cash',
-      status: 'completed',
-      verificationStatus: 'verified',
-      initiatedAt: new Date(),
-      completedAt: new Date(),
-      verifiedAt: new Date(),
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent'],
-    });
-
-    await payment.save();
-
-    // Generate barcode if new user
-    if (!user.barcode) {
-      const userCount = await User.countDocuments();
-      user.barcode = `GYM-2025-${String(userCount).padStart(3, '0')}`;
-    }
-
-    // Calculate membership dates
-    const startDate = user.membershipStartDate || new Date();
-    const endDate = new Date(startDate.getTime() + payment.duration * 24 * 60 * 60 * 1000);
-
-    // Activate user with membership dates
-    user.status = 'active';
-    user.paymentStatus = 'active';
-    user.isActive = true;
-    user.activationDate = user.activationDate || new Date();
-    user.lastPaymentDate = new Date();
-    user.membershipStartDate = startDate;
-    user.membershipEndDate = endDate;
-    user.nextDueDate = endDate;
-    await user.save();
-
-    console.log('✅ Cash payment recorded');
-
-    res.json({
+    // Step 9: Send success response
+    const responseData = {
       success: true,
-      message: 'Cash payment recorded successfully',
-      payment: payment,
+      message: 'Payment verified and membership activated',
+      payment: {
+        id: payment._id,
+        amount: payment.amount,
+        reference: payment.paystackReference,
+        membershipType: payment.membershipType,
+        duration: payment.duration
+      },
       user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        barcode: user.barcode,
+        membershipType: user.membershipType,
         status: user.status,
         membershipStartDate: user.membershipStartDate,
         membershipEndDate: user.membershipEndDate,
-        nextDueDate: user.nextDueDate
+        nextDueDate: user.nextDueDate,
+        isActive: user.isActive,
+        paymentStatus: user.paymentStatus
       }
+    };
+
+    console.log('✅ Sending success response');
+    console.log('===========================================');
+    
+    res.json(responseData);
+
+  } catch (error) {
+    console.error('===========================================');
+    console.error('❌ VERIFICATION CRITICAL ERROR');
+    console.error('===========================================');
+    console.error('Error:', error);
+    console.error('Stack:', error.stack);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Payment verification failed: ' + error.message,
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
-  } catch (err) {
-    console.error('❌ Cash payment error:', err.message);
-    res.status(500).json({ message: 'Server error' });
   }
 });
 
-// ============================================
-// ADMIN ROUTES - Must come after /my-history
-// ============================================
-
-// @route   GET /api/payments/stats
-// @desc    Get payment statistics (Admin)
-router.get('/stats', auth, async (req, res) => {
+// POST /api/payments - Record cash payment
+router.post('/', auth, async (req, res) => {
   try {
-    const totalPayments = await Payment.countDocuments({ status: 'completed' });
-    
-    const revenueResult = await Payment.aggregate([
-      { $match: { status: 'completed' } },
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ]);
-    
-    const totalRevenue = revenueResult[0]?.total || 0;
-    
-    const paymentsByType = await Payment.aggregate([
-      { $match: { status: 'completed' } },
-      { $group: { _id: '$membershipType', count: { $sum: 1 }, total: { $sum: '$amount' } } },
-      { $sort: { count: -1 } }
-    ]);
-    
-    const recentPayments = await Payment.find({ status: 'completed' })
-      .populate('user', 'name email')
-      .sort({ completedAt: -1 })
-      .limit(10);
-    
+    const { amount, membershipType, paymentMethod, duration, trainerAddon } = req.body;
+    const userId = req.user.id;
+
+    console.log('💵 Recording cash payment:', {
+      userId,
+      amount,
+      membershipType,
+      duration
+    });
+
+    const membershipDays = getDuration(membershipType, duration);
+
+    const payment = new Payment({
+      user: userId,
+      amount,
+      membershipType,
+      paymentMethod: paymentMethod || 'Cash',
+      duration: membershipDays,
+      trainerAddon: trainerAddon || false,
+      status: 'completed',
+      completedAt: new Date(),
+    });
+
+    await payment.save();
+    console.log('✅ Cash payment record saved');
+
+    // Update user membership
+    const user = await User.findById(userId);
+    if (user) {
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + membershipDays);
+
+      user.membershipType = membershipType;
+      user.status = 'active';
+      user.paymentStatus = 'active';
+      user.isActive = true;
+      user.activationDate = startDate;
+      user.membershipStartDate = startDate;
+      user.lastPaymentDate = startDate;
+      user.nextDueDate = endDate;
+      user.membershipEndDate = endDate;
+      
+      await user.save();
+      console.log('✅ User membership updated for cash payment');
+    }
+
     res.json({
-      totalPayments,
-      totalRevenue,
-      paymentsByType,
-      recentPayments
+      success: true,
+      message: 'Payment recorded successfully',
+      payment,
+      user: user ? {
+        membershipType: user.membershipType,
+        status: user.status,
+        membershipEndDate: user.membershipEndDate,
+        nextDueDate: user.nextDueDate
+      } : null
     });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ message: 'Server error' });
+
+  } catch (error) {
+    console.error('❌ Cash payment error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to record payment: ' + error.message
+    });
   }
 });
 
-// @route   GET /api/payments/user/:userId
-// @desc    Get user payment history (Admin)
-// IMPORTANT: This must come AFTER /my-history
-router.get('/user/:userId', auth, async (req, res) => {
-  try {
-    console.log('📋 Admin fetching payment history for user:', req.params.userId);
-    
-    const payments = await Payment.find({ user: req.params.userId })
-      .sort({ createdAt: -1 });
-    
-    console.log(`✅ Found ${payments.length} payments for user`);
-    
-    res.json(payments);
-  } catch (err) {
-    console.error('❌ Error fetching user payments:', err.message);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// @route   GET /api/payments
-// @desc    Get all payments (Admin)
+// GET /api/payments - Get all payments (admin only)
 router.get('/', auth, async (req, res) => {
   try {
+    const user = await User.findById(req.user.id);
+    if (!user || !user.isAdmin) {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
     const payments = await Payment.find()
-      .populate('user', 'name email membershipType')
+      .populate('user', 'name email phone')
       .sort({ createdAt: -1 })
       .limit(100);
-    res.json(payments);
+
+    res.json({
+      success: true,
+      payments,
+      total: payments.length,
+    });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Payments fetch error:', err.message);
+    res.status(500).json({ message: 'Failed to fetch payments' });
+  }
+});
+
+// GET /api/payments/history - Get user's payment history
+router.get('/history', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const payments = await Payment.find({ user: userId })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    res.json({
+      success: true,
+      payments,
+      total: payments.length,
+    });
+  } catch (err) {
+    console.error('Payment history error:', err.message);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to fetch payment history'
+    });
+  }
+});
+
+// GET /api/payments/stats - Get payment statistics (admin only)
+router.get('/stats', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || !user.isAdmin) {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const totalRevenue = await Payment.aggregate([
+      { $match: { status: 'completed' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+
+    const paymentsByMethod = await Payment.aggregate([
+      { $match: { status: 'completed' } },
+      { $group: { _id: '$paymentMethod', count: { $sum: 1 }, total: { $sum: '$amount' } } },
+    ]);
+
+    const trainerAddons = await Payment.countDocuments({ trainerAddon: true, status: 'completed' });
+
+    res.json({
+      success: true,
+      totalRevenue: totalRevenue[0]?.total || 0,
+      paymentsByMethod,
+      trainerAddons,
+    });
+  } catch (err) {
+    console.error('Payment stats error:', err.message);
+    res.status(500).json({ message: 'Failed to fetch payment statistics' });
   }
 });
 
