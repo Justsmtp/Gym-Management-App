@@ -391,7 +391,34 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// GET /api/payments/history - Get user's payment history
+// GET /api/payments/my-history - Get user's payment history (NEW ENDPOINT)
+router.get('/my-history', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    console.log('📋 Fetching payment history for user:', userId);
+
+    const payments = await Payment.find({ user: userId })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    console.log('✅ Found', payments.length, 'payments');
+
+    res.json({
+      success: true,
+      payments,
+      total: payments.length,
+    });
+  } catch (err) {
+    console.error('❌ Payment history error:', err.message);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to fetch payment history'
+    });
+  }
+});
+
+// GET /api/payments/history - Get user's payment history (LEGACY ENDPOINT - KEPT FOR COMPATIBILITY)
 router.get('/history', auth, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -407,6 +434,43 @@ router.get('/history', auth, async (req, res) => {
     });
   } catch (err) {
     console.error('Payment history error:', err.message);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to fetch payment history'
+    });
+  }
+});
+
+// GET /api/payments/user/:userId - Get specific user's payment history (NEW ENDPOINT)
+router.get('/user/:userId', auth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const requestingUserId = req.user.id;
+
+    console.log('📋 Fetching payments for user:', userId, 'requested by:', requestingUserId);
+
+    // Check if user is requesting their own data or is admin
+    const requestingUser = await User.findById(requestingUserId);
+    if (userId !== requestingUserId && (!requestingUser || !requestingUser.isAdmin)) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Access denied' 
+      });
+    }
+
+    const payments = await Payment.find({ user: userId })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    console.log('✅ Found', payments.length, 'payments for user');
+
+    res.json({
+      success: true,
+      payments,
+      total: payments.length,
+    });
+  } catch (err) {
+    console.error('❌ User payment history error:', err.message);
     res.status(500).json({ 
       success: false,
       message: 'Failed to fetch payment history'
