@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Loader, ArrowLeft, Mail, Lock, Shield } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import API from '../../api/api'; // ← ADDED THIS IMPORT
 
 const LoginScreen = () => {
   const { handleLogin, setCurrentScreen, resendVerification } = useApp();
@@ -35,14 +36,14 @@ const LoginScreen = () => {
   };
 
   // Temporary fix - remove in production
-const clearRateLimit = async () => {
-  try {
-    await API.post('/clear-rate-limit');
-    alert('Rate limit cleared! Try logging in again.');
-  } catch (err) {
-    console.error(err);
-  }
-};
+  const clearRateLimit = async () => {
+    try {
+      await API.post('/clear-rate-limit');
+      alert('Rate limit cleared! Try logging in again.');
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleResend = async () => {
     if (!email) {
@@ -102,6 +103,14 @@ const clearRateLimit = async () => {
             {error && (
               <div className="mb-4 p-4 bg-red-500/20 border border-red-500/50 rounded-xl backdrop-blur-sm">
                 <p className="text-sm text-red-200 font-semibold">⚠️ {error}</p>
+                {error.includes('Too many requests') || error.includes('429') && (
+                  <button
+                    onClick={clearRateLimit}
+                    className="mt-2 text-xs text-red-200 underline hover:text-red-100"
+                  >
+                    Clear Rate Limit (Dev Only)
+                  </button>
+                )}
               </div>
             )}
 
