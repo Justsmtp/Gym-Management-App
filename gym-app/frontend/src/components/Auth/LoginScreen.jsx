@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Loader, ArrowLeft, Mail, Lock, Shield } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import API from '../../api/api'; // ← ADDED THIS IMPORT
+import API from '../../api/api';
 
 const LoginScreen = () => {
   const { handleLogin, setCurrentScreen, resendVerification } = useApp();
@@ -138,7 +138,7 @@ const LoginScreen = () => {
             <form onSubmit={onSubmit} className="space-y-5">
               {/* Email Input */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-2 items-center gap-2">
+                <label className="block text-sm font-semibold text-white mb-2 flex items-center gap-2">
                   <Mail size={16} />
                   Email Address
                 </label>
@@ -154,10 +154,19 @@ const LoginScreen = () => {
 
               {/* Password Input */}
               <div>
-                <label className="block text-sm font-semibold text-white mb-2 items-center gap-2">
-                  <Lock size={16} />
-                  Password
-                </label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Lock size={16} />
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentScreen('forgotPassword')}
+                    className="text-xs text-blue-300 hover:text-blue-200 hover:underline transition"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
                 <input
                   required
                   type="password"
