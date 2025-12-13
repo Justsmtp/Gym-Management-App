@@ -332,6 +332,41 @@ router.post('/login', async (req, res) => {
 // USER MANAGEMENT
 // ============================================
 
+// Test verification email (for debugging)
+router.post('/test-verification-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+    
+    console.log('🧪 Testing verification email to:', email);
+    
+    const result = await sendVerificationEmail({
+      to: email,
+      token: 'test-token-' + crypto.randomBytes(12).toString('hex'),
+      name: 'Test User'
+    });
+    
+    console.log('✅ Test email sent, ID:', result.id);
+    
+    res.json({ 
+      success: true, 
+      message: 'Test email sent successfully',
+      emailId: result.id,
+      checkUrl: `https://resend.com/emails/${result.id}`
+    });
+  } catch (error) {
+    console.error('❌ Test email failed:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to send test email',
+      error: error.message 
+    });
+  }
+});
+
 // GET /api/auth/me
 router.get('/me', async (req, res) => {
   try {
