@@ -61,7 +61,7 @@ const userSchema = new mongoose.Schema({
     type: Date
   },
   
-  // Payment & Activation Fields - ADDED
+  // Payment & Activation Fields
   activationDate: {
     type: Date
   },
@@ -103,6 +103,16 @@ const userSchema = new mongoose.Schema({
   },
   verificationToken: {
     type: String
+  },
+  
+  // Password Reset - ADDED
+  resetPasswordToken: {
+    type: String,
+    default: null
+  },
+  resetPasswordExpiry: {
+    type: Date,
+    default: null
   },
   
   // Profile Picture URL
