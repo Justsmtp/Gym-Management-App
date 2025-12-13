@@ -45,25 +45,45 @@ const sendVerificationEmail = async ({ to, token, name }) => {
       </head>
       <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
         <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+          
+          <!-- Header -->
           <div style="background-color: #000000; padding: 40px 20px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">1st Impression Fitness</h1>
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">✉️ Email Verification</h1>
+            <p style="color: #cccccc; margin: 10px 0 0 0; font-size: 14px;">1st Impression Fitness Center</p>
           </div>
+          
+          <!-- Content -->
           <div style="padding: 40px 30px;">
-            <h2 style="color: #333333; margin: 0 0 20px 0;">Welcome${name ? `, ${name}` : ''}! 👋</h2>
+            <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px; font-weight: 600;">
+              Welcome${name ? `, ${name}` : ''}! 👋
+            </h2>
+            
             <p style="color: #666666; font-size: 16px; margin: 20px 0;">
-              Thank you for joining 1st Impression Fitness Center.
+              Thank you for joining <strong>1st Impression Fitness Center</strong>. We're excited to have you!
             </p>
+            
             <p style="color: #666666; font-size: 16px; margin: 20px 0;">
               Please verify your email address by clicking the button below:
             </p>
+            
+            <!-- CTA Button -->
             <div style="text-align: center; margin: 35px 0;">
               <a href="${verifyUrl}" 
-                 style="display: inline-block; padding: 16px 40px; background-color: #000000; 
-                        color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">
+                 style="display: inline-block; 
+                        padding: 16px 40px; 
+                        background-color: #000000; 
+                        color: #ffffff; 
+                        text-decoration: none; 
+                        border-radius: 6px; 
+                        font-size: 16px; 
+                        font-weight: 600;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 Verify My Email Address
               </a>
             </div>
-            <div style="margin: 30px 0; padding: 20px; background-color: #f9f9f9; border-radius: 6px;">
+            
+            <!-- Alternative Link -->
+            <div style="margin: 30px 0; padding: 20px; background-color: #f9f9f9; border-radius: 6px; border-left: 4px solid #000000;">
               <p style="color: #666666; font-size: 13px; margin: 0 0 10px 0;">
                 <strong>Button not working?</strong> Copy and paste this link:
               </p>
@@ -71,12 +91,29 @@ const sendVerificationEmail = async ({ to, token, name }) => {
                 ${verifyUrl}
               </p>
             </div>
-          </div>
-          <div style="background-color: #f8f8f8; padding: 20px; text-align: center;">
-            <p style="color: #999999; font-size: 13px; margin: 0;">
-              © ${new Date().getFullYear()} 1st Impression Fitness Center
+            
+            <!-- Info Box -->
+            <div style="margin: 30px 0; padding: 20px; background-color: #fff8e1; border-radius: 6px; border-left: 4px solid #ffc107;">
+              <p style="color: #856404; font-size: 13px; margin: 0;">
+                <strong>⏰ Note:</strong> This verification link will expire in 24 hours.
+              </p>
+            </div>
+            
+            <p style="color: #666666; font-size: 14px; margin: 30px 0 0 0;">
+              If you didn't create this account, please ignore this email.
             </p>
           </div>
+          
+          <!-- Footer -->
+          <div style="background-color: #f8f8f8; padding: 30px; text-align: center; border-top: 1px solid #eeeeee;">
+            <p style="color: #999999; font-size: 13px; margin: 0;">
+              © ${new Date().getFullYear()} 1st Impression Fitness Center. All rights reserved.
+            </p>
+            <p style="color: #cccccc; font-size: 11px; margin: 15px 0 0 0;">
+              Questions? Contact us at support@1stimpressionfitness.com
+            </p>
+          </div>
+          
         </div>
       </body>
       </html>
@@ -90,26 +127,39 @@ Thank you for joining 1st Impression Fitness Center.
 Please verify your email address:
 ${verifyUrl}
 
+If the link doesn't work, copy and paste it into your browser.
+
+This verification link will expire in 24 hours.
+
 If you didn't create this account, please ignore this email.
 
 © ${new Date().getFullYear()} 1st Impression Fitness Center
+Questions? Contact us at support@1stimpressionfitness.com
     `.trim();
 
     const data = await resend.emails.send({
       from: `1st Impression Fitness <${fromEmail}>`,
       to: [to],
-      subject: 'Please Verify Your Email Address',
+      subject: 'Verify Your Email - 1st Impression Fitness',
       text,
       html,
+      tags: [
+        {
+          name: 'category',
+          value: 'verification'
+        }
+      ]
     });
 
-    console.log('✅ Email sent successfully');
+    console.log('✅ Verification email sent successfully');
     console.log('📧 Email ID:', data.id);
+    console.log('📊 Check status: https://resend.com/emails/' + data.id);
 
     return data;
 
   } catch (error) {
     console.error('❌ Email sending error:', error.message);
+    console.error('❌ Full error:', error);
     throw new Error(`Failed to send verification email: ${error.message}`);
   }
 };
