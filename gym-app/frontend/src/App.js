@@ -5,6 +5,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import SplashScreen from './components/Auth/SplashScreen';
 import LoginScreen from './components/Auth/LoginScreen';
 import RegisterScreen from './components/Auth/RegisterScreen';
+import ForgotPasswordScreen from './components/Auth/ForgotPasswordScreen';
 
 // User Components
 import UserDashboard from './components/User/UserDashboard';
@@ -23,6 +24,7 @@ const AppRoutes = () => {
       {currentScreen === 'splash' && <SplashScreen />}
       {currentScreen === 'login' && <LoginScreen />}
       {currentScreen === 'register' && <RegisterScreen />}
+      {currentScreen === 'forgotPassword' && <ForgotPasswordScreen />}
       {currentScreen === 'userDashboard' && <UserDashboard />}
       {currentScreen === 'barcode' && <BarcodeScreen />}
       {currentScreen === 'payment' && <PaymentScreen />}
