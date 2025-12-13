@@ -4,7 +4,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { sendVerificationEmail } = require('../utils/mailer');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/mailer');
 
 const membershipDetails = {
   'Walk-in': { price: 5000, duration: 1 },
@@ -12,6 +12,10 @@ const membershipDetails = {
   Deluxe: { price: 15500, duration: 30 },
   'Bi-Monthly': { price: 40000, duration: 90 },
 };
+
+// ============================================
+// REGISTRATION & VERIFICATION
+// ============================================
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -157,6 +161,10 @@ router.post('/resend', async (req, res) => {
   }
 });
 
+// ============================================
+// PASSWORD RESET
+// ============================================
+
 // POST /api/auth/forgot-password
 router.post('/forgot-password', async (req, res) => {
   try {
@@ -169,38 +177,37 @@ router.post('/forgot-password', async (req, res) => {
 
     const user = await User.findOne({ email: email.toLowerCase() });
     
-    // Don't reveal if user exists (security best practice)
+    // Security: Don't reveal if user exists or not
     if (!user) {
+      // Still return success to prevent email enumeration
+      console.log('⚠️ User not found, but returning success for security');
       return res.json({ 
         success: true, 
-        message: 'If an account exists, a reset link has been sent to your email' 
+        message: 'If an account exists with this email, you will receive a reset code.' 
       });
     }
 
-    // Generate reset token (expires in 1 hour)
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpiry = Date.now() + 3600000; // 1 hour
+    // Generate 6-digit reset code
+    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     user.resetPasswordToken = resetToken;
     user.resetPasswordExpiry = resetTokenExpiry;
     await user.save();
 
-    // Send reset email
+    console.log('✅ Reset token generated:', resetToken);
+
     let emailSent = false;
     let emailError = null;
 
     try {
-      const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
-      
-      // You'll need to create this function in utils/mailer.js
-      const result = await sendPasswordResetEmail({
+      await sendPasswordResetEmail({
         to: user.email,
-        name: user.name,
-        resetUrl: resetUrl
+        token: resetToken,
+        name: user.name
       });
-      
       emailSent = true;
-      console.log('✅ Reset email sent to:', user.email);
+      console.log('✅ Reset email sent');
     } catch (mailErr) {
       emailError = mailErr.message;
       console.error('❌ Reset email failed:', mailErr.message);
@@ -209,49 +216,48 @@ router.post('/forgot-password', async (req, res) => {
     res.json({ 
       success: emailSent, 
       message: emailSent 
-        ? 'Password reset link sent to your email' 
-        : 'Failed to send reset email. Please try again.',
-      emailSent
+        ? 'Reset code sent to your email' 
+        : 'Failed to send reset code. Please try again.',
+      emailError: emailError
     });
-    
   } catch (err) {
     console.error('❌ Forgot password error:', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// POST /api/auth/reset-password/:token
-router.post('/reset-password/:token', async (req, res) => {
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
   try {
-    const { token } = req.params;
-    const { password } = req.body;
-
-    console.log('🔑 Password reset attempt with token');
-
-    if (!password) {
-      return res.status(400).json({ message: 'Password is required' });
+    const { email, resetToken, newPassword } = req.body;
+    console.log('🔐 Password reset attempt for:', email);
+    
+    if (!email || !resetToken || !newPassword) {
+      return res.status(400).json({ message: 'All fields are required' });
     }
 
-    if (password.length < 6) {
+    if (newPassword.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
 
-    // Find user with valid reset token
-    const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpiry: { $gt: Date.now() }
+    const user = await User.findOne({ 
+      email: email.toLowerCase(),
+      resetPasswordToken: resetToken
     });
 
     if (!user) {
-      return res.status(400).json({ 
-        message: 'Invalid or expired reset token. Please request a new one.' 
-      });
+      return res.status(400).json({ message: 'Invalid or expired reset code' });
+    }
+
+    // Check if token is expired
+    if (new Date() > user.resetPasswordExpiry) {
+      return res.status(400).json({ message: 'Reset code has expired. Please request a new one.' });
     }
 
     // Update password
-    user.password = password;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpiry = undefined;
+    user.password = newPassword;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpiry = null;
     await user.save();
 
     console.log('✅ Password reset successful for:', user.email);
@@ -260,42 +266,15 @@ router.post('/reset-password/:token', async (req, res) => {
       success: true, 
       message: 'Password reset successful! You can now login with your new password.' 
     });
-    
   } catch (err) {
     console.error('❌ Reset password error:', err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// GET /api/auth/verify-reset-token/:token
-router.get('/verify-reset-token/:token', async (req, res) => {
-  try {
-    const { token } = req.params;
-
-    const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpiry: { $gt: Date.now() }
-    });
-
-    if (!user) {
-      return res.status(400).json({ 
-        valid: false,
-        message: 'Invalid or expired reset token' 
-      });
-    }
-
-    res.json({ 
-      valid: true,
-      email: user.email 
-    });
-    
-  } catch (err) {
-    console.error('❌ Verify token error:', err.message);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-
+// ============================================
+// LOGIN
+// ============================================
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -349,6 +328,10 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
 // GET /api/auth/me
 router.get('/me', async (req, res) => {
   try {
@@ -356,7 +339,7 @@ router.get('/me', async (req, res) => {
     if (!token) return res.status(401).json({ message: 'No token' });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-    const user = await User.findById(decoded.user.id).select('-password -verificationToken');
+    const user = await User.findById(decoded.user.id).select('-password -verificationToken -resetPasswordToken');
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     res.json(user);
