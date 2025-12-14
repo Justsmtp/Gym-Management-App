@@ -122,7 +122,7 @@ const sendVerificationEmail = async ({ to, token, name }) => {
     const text = `
 Welcome${name ? `, ${name}` : ''}!
 
-Thank you for joining 1st Impression Fitness Center.
+Thank you for joining 1st Impression Fitness Gym Center.
 
 Please verify your email address:
 ${verifyUrl}
@@ -260,7 +260,7 @@ const sendPasswordResetEmail = async ({ to, token, name }) => {
           <!-- Footer -->
           <div style="background-color: #f8f8f8; padding: 30px; text-align: center; border-top: 1px solid #eeeeee;">
             <p style="color: #999999; font-size: 13px; margin: 0;">
-              © ${new Date().getFullYear()} 1st Impression Fitness Center. All rights reserved.
+              © ${new Date().getFullYear()} 1st Impression Fitness Gym Center. All rights reserved.
             </p>
             <p style="color: #cccccc; font-size: 11px; margin: 15px 0 0 0;">
               Questions? Contact us at support@1stimpressionfitness.com
@@ -275,7 +275,7 @@ const sendPasswordResetEmail = async ({ to, token, name }) => {
     const text = `
 Hi${name ? ` ${name}` : ''},
 
-We received a request to reset your password for your 1st Impression Fitness account.
+We received a request to reset your password for your 1st Impression Fitness Gym account.
 
 Your password reset code is: ${token}
 
