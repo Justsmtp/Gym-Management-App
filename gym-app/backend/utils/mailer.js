@@ -1,353 +1,371 @@
 // backend/utils/mailer.js
-const { Resend } = require('resend');
+const { Resend } = require(‘resend’);
 
 /**
- * Initialize Resend client
- */
-const getResendClient = () => {
+
+- Initialize Resend client with validation
+  */
+  const getResendClient = () => {
   if (!process.env.RESEND_API_KEY) {
-    console.error('❌ RESEND_API_KEY not found in environment');
-    throw new Error('RESEND_API_KEY is not configured in environment variables');
+  console.error(‘❌ RESEND_API_KEY not found in environment variables’);
+  console.error(‘💡 Add RESEND_API_KEY to your .env file’);
+  throw new Error(‘RESEND_API_KEY is not configured’);
   }
-  console.log('✅ Resend client initialized');
-  return new Resend(process.env.RESEND_API_KEY);
+
+const apiKey = process.env.RESEND_API_KEY.trim();
+
+// Validate API key format
+if (!apiKey.startsWith(‘re_’)) {
+console.error(‘❌ Invalid RESEND_API_KEY format. Should start with “re_”’);
+throw new Error(‘Invalid RESEND_API_KEY format’);
+}
+
+console.log(‘✅ Resend client initialized’);
+console.log(‘📧 API Key:’, apiKey.substring(0, 10) + ‘…’ + apiKey.substring(apiKey.length - 4));
+
+return new Resend(apiKey);
 };
 
 /**
- * Get the sender email
- */
-const getSenderEmail = () => {
-  return process.env.SENDER_EMAIL || 'onboarding@resend.dev';
+
+- Get sender email with validation
+  */
+  const getSenderEmail = () => {
+  const senderEmail = process.env.SENDER_EMAIL || ‘onboarding@resend.dev’;
+  console.log(‘📧 Sender email:’, senderEmail);
+  return senderEmail;
+  };
+
+/**
+
+- Enhanced error logging
+  */
+  const logEmailError = (error, context) => {
+  console.error(‘━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━’);
+  console.error(‘❌ EMAIL ERROR:’, context);
+  console.error(‘━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━’);
+  console.error(‘Error Type:’, error.name);
+  console.error(‘Error Message:’, error.message);
+
+if (error.response) {
+console.error(‘Response Status:’, error.response.status);
+console.error(‘Response Data:’, JSON.stringify(error.response.data, null, 2));
+}
+
+if (error.statusCode) {
+console.error(‘Status Code:’, error.statusCode);
+}
+
+console.error(‘Full Error:’, error);
+console.error(‘━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━’);
+
+// Provide helpful suggestions
+if (error.message?.includes(‘API key’)) {
+console.error(‘💡 Check your RESEND_API_KEY in .env file’);
+console.error(‘💡 Get your API key from: https://resend.com/api-keys’);
+} else if (error.message?.includes(‘domain’)) {
+console.error(‘💡 If using custom domain, verify it at: https://resend.com/domains’);
+console.error(‘💡 Or use onboarding@resend.dev for testing’);
+} else if (error.message?.includes(‘rate limit’) || error.statusCode === 429) {
+console.error(‘💡 Rate limit reached. Free tier: 100 emails/day, 1 email/second’);
+console.error(‘💡 Wait a moment or upgrade plan at: https://resend.com/pricing’);
+} else if (error.statusCode === 403) {
+console.error(‘💡 Access denied. Check API key permissions’);
+} else if (error.statusCode === 422) {
+console.error(‘💡 Invalid request data. Check email format and content’);
+}
 };
 
 /**
- * Sends verification email to new users
- */
-const sendVerificationEmail = async ({ to, token, name }) => {
-  try {
-    console.log('📧 Sending verification email to:', to);
 
-    const resend = getResendClient();
-    const fromEmail = getSenderEmail();
-    const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const verifyUrl = `${frontend}/verify/${token}`;
+- Sends verification email to new users
+  */
+  const sendVerificationEmail = async ({ to, token, name }) => {
+  const startTime = Date.now();
 
-    console.log('📧 From:', fromEmail);
-    console.log('📧 Verify URL:', verifyUrl);
+try {
+console.log(’\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━’);
+console.log(‘📧 SENDING VERIFICATION EMAIL’);
+console.log(‘━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━’);
+console.log(‘To:’, to);
+console.log(‘Name:’, name);
+console.log(‘Token:’, token.substring(0, 12) + ‘…’);
+console.log(‘Timestamp:’, new Date().toISOString());
 
-    const html = `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Verify Your Email</title>
-      </head>
-      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-          
-          <!-- Header -->
-          <div style="background-color: #000000; padding: 40px 20px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">✉️ Email Verification</h1>
-            <p style="color: #cccccc; margin: 10px 0 0 0; font-size: 14px;">1st Impression Fitness Center</p>
-          </div>
-          
-          <!-- Content -->
-          <div style="padding: 40px 30px;">
-            <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px; font-weight: 600;">
-              Welcome${name ? `, ${name}` : ''}! 👋
-            </h2>
-            
-            <p style="color: #666666; font-size: 16px; margin: 20px 0;">
-              Thank you for joining <strong>1st Impression Fitness Center</strong>. We're excited to have you!
-            </p>
-            
-            <p style="color: #666666; font-size: 16px; margin: 20px 0;">
-              Please verify your email address by clicking the button below:
-            </p>
-            
-            <!-- CTA Button -->
-            <div style="text-align: center; margin: 35px 0;">
-              <a href="${verifyUrl}" 
-                 style="display: inline-block; 
-                        padding: 16px 40px; 
-                        background-color: #000000; 
-                        color: #ffffff; 
-                        text-decoration: none; 
-                        border-radius: 6px; 
-                        font-size: 16px; 
-                        font-weight: 600;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                Verify My Email Address
-              </a>
-            </div>
-            
-            <!-- Alternative Link -->
-            <div style="margin: 30px 0; padding: 20px; background-color: #f9f9f9; border-radius: 6px; border-left: 4px solid #000000;">
-              <p style="color: #666666; font-size: 13px; margin: 0 0 10px 0;">
-                <strong>Button not working?</strong> Copy and paste this link:
-              </p>
-              <p style="color: #0066cc; font-size: 13px; word-break: break-all; margin: 0;">
-                ${verifyUrl}
-              </p>
-            </div>
-            
-            <!-- Info Box -->
-            <div style="margin: 30px 0; padding: 20px; background-color: #fff8e1; border-radius: 6px; border-left: 4px solid #ffc107;">
-              <p style="color: #856404; font-size: 13px; margin: 0;">
-                <strong>⏰ Note:</strong> This verification link will expire in 24 hours.
-              </p>
-            </div>
-            
-            <p style="color: #666666; font-size: 14px; margin: 30px 0 0 0;">
-              If you didn't create this account, please ignore this email.
-            </p>
-          </div>
-          
-          <!-- Footer -->
-          <div style="background-color: #f8f8f8; padding: 30px; text-align: center; border-top: 1px solid #eeeeee;">
-            <p style="color: #999999; font-size: 13px; margin: 0;">
-              © ${new Date().getFullYear()} 1st Impression Fitness Center. All rights reserved.
-            </p>
-            <p style="color: #cccccc; font-size: 11px; margin: 15px 0 0 0;">
-              Questions? Contact us at support@1stimpressionfitness.com
-            </p>
-          </div>
-          
+```
+const resend = getResendClient();
+const fromEmail = getSenderEmail();
+const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
+const verifyUrl = `${frontend}/verify/${token}`;
+
+console.log('🔗 Verify URL:', verifyUrl);
+
+const html = `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email</title>
+  </head>
+  <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+      <div style="background-color: #000000; padding: 40px 20px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">✉️ Email Verification</h1>
+        <p style="color: #cccccc; margin: 10px 0 0 0; font-size: 14px;">1st Impression Fitness Center</p>
+      </div>
+      <div style="padding: 40px 30px;">
+        <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px; font-weight: 600;">
+          Welcome${name ? `, ${name}` : ''}! 👋
+        </h2>
+        <p style="color: #666666; font-size: 16px; margin: 20px 0;">
+          Thank you for joining <strong>1st Impression Fitness Center</strong>. We're excited to have you!
+        </p>
+        <p style="color: #666666; font-size: 16px; margin: 20px 0;">
+          Please verify your email address by clicking the button below:
+        </p>
+        <div style="text-align: center; margin: 35px 0;">
+          <a href="${verifyUrl}" 
+             style="display: inline-block; padding: 16px 40px; background-color: #000000; 
+                    color: #ffffff; text-decoration: none; border-radius: 6px; 
+                    font-size: 16px; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            Verify My Email Address
+          </a>
         </div>
-      </body>
-      </html>
-    `;
+        <div style="margin: 30px 0; padding: 20px; background-color: #f9f9f9; border-radius: 6px; border-left: 4px solid #000000;">
+          <p style="color: #666666; font-size: 13px; margin: 0 0 10px 0;">
+            <strong>Button not working?</strong> Copy and paste this link:
+          </p>
+          <p style="color: #0066cc; font-size: 13px; word-break: break-all; margin: 0;">
+            ${verifyUrl}
+          </p>
+        </div>
+        <div style="margin: 30px 0; padding: 20px; background-color: #fff8e1; border-radius: 6px; border-left: 4px solid #ffc107;">
+          <p style="color: #856404; font-size: 13px; margin: 0;">
+            <strong>⏰ Note:</strong> This verification link will expire in 24 hours.
+          </p>
+        </div>
+        <p style="color: #666666; font-size: 14px; margin: 30px 0 0 0;">
+          If you didn't create this account, please ignore this email.
+        </p>
+      </div>
+      <div style="background-color: #f8f8f8; padding: 30px; text-align: center; border-top: 1px solid #eeeeee;">
+        <p style="color: #999999; font-size: 13px; margin: 0;">
+          © ${new Date().getFullYear()} 1st Impression Fitness Center. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>
+`;
 
-    const text = `
-Welcome${name ? `, ${name}` : ''}!
+const text = `
+```
 
-Thank you for joining 1st Impression Fitness Gym Center.
+Welcome${name ? `, ${name}` : ‘’}!
+
+Thank you for joining 1st Impression Fitness Center.
 
 Please verify your email address:
 ${verifyUrl}
 
-If the link doesn't work, copy and paste it into your browser.
-
 This verification link will expire in 24 hours.
 
-If you didn't create this account, please ignore this email.
+If you didn’t create this account, please ignore this email.
 
 © ${new Date().getFullYear()} 1st Impression Fitness Center
-Questions? Contact us at support@1stimpressionfitness.com
-    `.trim();
+`.trim();
 
-    const data = await resend.emails.send({
-      from: `1st Impression Fitness <${fromEmail}>`,
-      to: [to],
-      subject: 'Verify Your Email - 1st Impression Fitness',
-      text,
-      html,
-      tags: [
-        {
-          name: 'category',
-          value: 'verification'
-        }
-      ]
-    });
+```
+console.log('📤 Sending to Resend API...');
 
-    console.log('✅ Verification email sent successfully');
-    console.log('📧 Email ID:', data.id);
-    console.log('📊 Check status: https://resend.com/emails/' + data.id);
+const data = await resend.emails.send({
+  from: `1st Impression Fitness <${fromEmail}>`,
+  to: [to],
+  subject: 'Verify Your Email - 1st Impression Fitness',
+  text,
+  html,
+  tags: [{ name: 'category', value: 'verification' }]
+});
 
-    return data;
+const duration = Date.now() - startTime;
 
-  } catch (error) {
-    console.error('❌ Email sending error:', error.message);
-    console.error('❌ Full error:', error);
-    throw new Error(`Failed to send verification email: ${error.message}`);
-  }
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('✅ VERIFICATION EMAIL SENT SUCCESSFULLY');
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('Email ID:', data.id);
+console.log('Duration:', duration + 'ms');
+console.log('Check status:', `https://resend.com/emails/${data.id}`);
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+return data;
+```
+
+} catch (error) {
+logEmailError(error, ‘Verification Email’);
+throw error;
+}
 };
 
 /**
- * Sends password reset email with 6-digit code
- * @param {Object} params - Email parameters
- * @param {string} params.to - Recipient email
- * @param {string} params.token - 6-digit reset code (NOT resetToken!)
- * @param {string} params.name - User's name
- */
-const sendPasswordResetEmail = async ({ to, token, name }) => {
-  try {
-    console.log('📧 Sending password reset email to:', to);
-    console.log('🔑 Reset code:', token);
 
-    const resend = getResendClient();
-    const fromEmail = getSenderEmail();
+- Sends password reset email with 6-digit code
+  */
+  const sendPasswordResetEmail = async ({ to, token, name }) => {
+  const startTime = Date.now();
 
-    const html = `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Reset Your Password</title>
-      </head>
-      <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-          
-          <!-- Header -->
-          <div style="background-color: #000000; padding: 40px 20px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">🔐 Password Reset</h1>
-            <p style="color: #cccccc; margin: 10px 0 0 0; font-size: 14px;">1st Impression Fitness Center</p>
-          </div>
-          
-          <!-- Content -->
-          <div style="padding: 40px 30px;">
-            <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px; font-weight: 600;">
-              Password Reset Request
-            </h2>
-            
-            <p style="color: #666666; font-size: 16px; margin: 0 0 10px 0;">
-              Hi${name ? ` ${name}` : ''},
-            </p>
-            
-            <p style="color: #666666; font-size: 16px; margin: 20px 0;">
-              We received a request to reset your password. Use the code below to reset your password:
-            </p>
-            
-            <!-- Reset Code Box -->
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                        border-radius: 12px; 
-                        padding: 30px; 
-                        text-align: center; 
-                        margin: 30px 0;
-                        box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-              <p style="color: rgba(255,255,255,0.9); font-size: 14px; margin: 0 0 15px 0; text-transform: uppercase; letter-spacing: 2px;">
-                Your Reset Code
-              </p>
-              <p style="color: #ffffff; 
-                        font-size: 48px; 
-                        font-weight: 700; 
-                        letter-spacing: 8px; 
-                        margin: 0; 
-                        font-family: 'Courier New', monospace;">
-                ${token}
-              </p>
-              <p style="color: rgba(255,255,255,0.8); font-size: 12px; margin: 15px 0 0 0;">
-                Enter this code on the password reset page
-              </p>
-            </div>
-            
-            <!-- Warning Box -->
-            <div style="margin: 30px 0; padding: 20px; background-color: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
-              <p style="color: #856404; font-size: 14px; margin: 0; line-height: 1.6;">
-                <strong>⏰ Important:</strong> This code will expire in <strong>15 minutes</strong> for security reasons.
-              </p>
-            </div>
-            
-            <!-- Security Tips -->
-            <div style="margin: 30px 0; padding: 20px; background-color: #f0f0f0; border-radius: 6px;">
-              <p style="color: #666666; font-size: 14px; margin: 0 0 10px 0;">
-                <strong>🛡️ Security Tips:</strong>
-              </p>
-              <ul style="color: #666666; font-size: 14px; margin: 0; padding-left: 20px;">
-                <li>Never share this code with anyone</li>
-                <li>We will never ask for your password via email</li>
-                <li>This code can only be used once</li>
-              </ul>
-            </div>
-            
-            <p style="color: #666666; font-size: 14px; margin: 30px 0 0 0;">
-              If you didn't request this password reset, please ignore this email or contact our support team if you have concerns.
-            </p>
-          </div>
-          
-          <!-- Footer -->
-          <div style="background-color: #f8f8f8; padding: 30px; text-align: center; border-top: 1px solid #eeeeee;">
-            <p style="color: #999999; font-size: 13px; margin: 0;">
-              © ${new Date().getFullYear()} 1st Impression Fitness Gym Center. All rights reserved.
-            </p>
-            <p style="color: #cccccc; font-size: 11px; margin: 15px 0 0 0;">
-              Questions? Contact us at support@1stimpressionfitness.com
-            </p>
-          </div>
-          
+try {
+console.log(’\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━’);
+console.log(‘🔑 SENDING PASSWORD RESET EMAIL’);
+console.log(‘━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━’);
+console.log(‘To:’, to);
+console.log(‘Name:’, name);
+console.log(‘Reset Code:’, token);
+console.log(‘Timestamp:’, new Date().toISOString());
+
+```
+const resend = getResendClient();
+const fromEmail = getSenderEmail();
+
+const html = `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Your Password</title>
+  </head>
+  <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+      <div style="background-color: #000000; padding: 40px 20px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">🔐 Password Reset</h1>
+        <p style="color: #cccccc; margin: 10px 0 0 0; font-size: 14px;">1st Impression Fitness Center</p>
+      </div>
+      <div style="padding: 40px 30px;">
+        <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px; font-weight: 600;">
+          Password Reset Request
+        </h2>
+        <p style="color: #666666; font-size: 16px; margin: 0 0 10px 0;">
+          Hi${name ? ` ${name}` : ''},
+        </p>
+        <p style="color: #666666; font-size: 16px; margin: 20px 0;">
+          We received a request to reset your password. Use the code below:
+        </p>
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    border-radius: 12px; padding: 30px; text-align: center; margin: 30px 0;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+          <p style="color: rgba(255,255,255,0.9); font-size: 14px; margin: 0 0 15px 0; 
+                    text-transform: uppercase; letter-spacing: 2px;">Your Reset Code</p>
+          <p style="color: #ffffff; font-size: 48px; font-weight: 700; letter-spacing: 8px; 
+                    margin: 0; font-family: 'Courier New', monospace;">${token}</p>
         </div>
-      </body>
-      </html>
-    `;
+        <div style="margin: 30px 0; padding: 20px; background-color: #fff3cd; 
+                    border-radius: 6px; border-left: 4px solid #ffc107;">
+          <p style="color: #856404; font-size: 14px; margin: 0;">
+            <strong>⏰ Important:</strong> This code expires in <strong>15 minutes</strong>.
+          </p>
+        </div>
+        <div style="margin: 30px 0; padding: 20px; background-color: #f0f0f0; border-radius: 6px;">
+          <p style="color: #666666; font-size: 14px; margin: 0 0 10px 0;"><strong>🛡️ Security Tips:</strong></p>
+          <ul style="color: #666666; font-size: 14px; margin: 0; padding-left: 20px;">
+            <li>Never share this code</li>
+            <li>We never ask for passwords via email</li>
+            <li>This code can only be used once</li>
+          </ul>
+        </div>
+      </div>
+      <div style="background-color: #f8f8f8; padding: 30px; text-align: center; border-top: 1px solid #eeeeee;">
+        <p style="color: #999999; font-size: 13px; margin: 0;">
+          © ${new Date().getFullYear()} 1st Impression Fitness Center. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>
+`;
 
-    const text = `
-Hi${name ? ` ${name}` : ''},
+const text = `
+```
 
-We received a request to reset your password for your 1st Impression Fitness Gym account.
+Hi${name ? ` ${name}` : ‘’},
 
 Your password reset code is: ${token}
 
-This code will expire in 15 minutes for security reasons.
+This code expires in 15 minutes.
 
-If you didn't request this password reset, please ignore this email.
-
-Security Tips:
-- Never share this code with anyone
-- We will never ask for your password via email
-- This code can only be used once
+If you didn’t request this, please ignore this email.
 
 © ${new Date().getFullYear()} 1st Impression Fitness Center
-Questions? Contact us at support@1stimpressionfitness.com
-    `.trim();
+`.trim();
 
-    const data = await resend.emails.send({
-      from: `1st Impression Fitness <${fromEmail}>`,
-      to: [to],
-      subject: 'Password Reset Code - 1st Impression Fitness',
-      text,
-      html,
-      tags: [
-        {
-          name: 'category',
-          value: 'password-reset'
-        }
-      ]
-    });
+```
+console.log('📤 Sending to Resend API...');
 
-    console.log('✅ Password reset email sent successfully');
-    console.log('📧 Email ID:', data.id);
+const data = await resend.emails.send({
+  from: `1st Impression Fitness <${fromEmail}>`,
+  to: [to],
+  subject: 'Password Reset Code - 1st Impression Fitness',
+  text,
+  html,
+  tags: [{ name: 'category', value: 'password-reset' }]
+});
 
-    return data;
+const duration = Date.now() - startTime;
 
-  } catch (error) {
-    console.error('❌ Password reset email error:', error.message);
-    throw new Error(`Failed to send password reset email: ${error.message}`);
-  }
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('✅ PASSWORD RESET EMAIL SENT SUCCESSFULLY');
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+console.log('Email ID:', data.id);
+console.log('Duration:', duration + 'ms');
+console.log('Check status:', `https://resend.com/emails/${data.id}`);
+console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+return data;
+```
+
+} catch (error) {
+logEmailError(error, ‘Password Reset Email’);
+throw error;
+}
 };
 
 /**
- * Test email configuration
- */
-const testEmailConfig = async (testRecipient) => {
+
+- Test email configuration
+  */
+  const testEmailConfig = async (testRecipient) => {
   try {
-    console.log('🧪 Testing Resend configuration...');
-    const resend = getResendClient();
-    const fromEmail = getSenderEmail();
-    console.log('✅ Configuration valid');
-
-    if (testRecipient) {
-      const data = await resend.emails.send({
-        from: `1st Impression Fitness <${fromEmail}>`,
-        to: [testRecipient],
-        subject: 'Test Email',
-        text: 'Test successful',
-        html: '<p>Test successful</p>'
-      });
-      return { success: true, emailId: data.id };
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('❌ Test failed:', error.message);
-    return { success: false, error: error.message };
+  console.log(’\n🧪 Testing Resend configuration…’);
+  const resend = getResendClient();
+  const fromEmail = getSenderEmail();
+  
+  console.log(‘✅ Configuration valid’);
+  
+  if (testRecipient) {
+  console.log(‘📤 Sending test email…’);
+  const data = await resend.emails.send({
+  from: `1st Impression Fitness <${fromEmail}>`,
+  to: [testRecipient],
+  subject: ‘✅ Email Configuration Test’,
+  text: ‘Your Resend email configuration is working correctly!’,
+  html: `<div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;"> <h2 style="color: #28a745;">✅ Configuration Successful!</h2> <p>Your Resend email service is working correctly.</p> <p><strong>From:</strong> ${fromEmail}<br> <strong>To:</strong> ${testRecipient}<br> <strong>Time:</strong> ${new Date().toLocaleString()}</p> <p style="color: #666; font-size: 12px; margin-top: 30px;"> This is a test email from 1st Impression Fitness Center </p> </div>`
+  });
+  
+  console.log(‘✅ Test email sent successfully’);
+  console.log(‘📧 Email ID:’, data.id);
+  return { success: true, emailId: data.id };
   }
-};
+  
+  return { success: true, message: ‘Configuration is valid’ };
+  } catch (error) {
+  logEmailError(error, ‘Test Email’);
+  return { success: false, error: error.message };
+  }
+  };
 
 module.exports = {
-  sendVerificationEmail,
-  sendPasswordResetEmail,
-  testEmailConfig,
-  getResendClient
+sendVerificationEmail,
+sendPasswordResetEmail,
+testEmailConfig,
+getResendClient
 };
