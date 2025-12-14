@@ -57,9 +57,9 @@ export const AppProvider = ({ children }) => {
 
       console.log('✅ Login successful:', userWithId);
 
-      localStorage.setItem('token', token);
-      localStorage.setItem('currentUser', JSON.stringify(userWithId));
-      localStorage.setItem('userType', userWithId.isAdmin ? 'admin' : 'user');
+      sessionStorage.setItem('token', token);
+      sessionStorage.setItem('currentUser', JSON.stringify(userWithId));
+      sessionStorage.setItem('userType', userWithId.isAdmin ? 'admin' : 'user');
 
       setCurrentUser(userWithId);
       setUserType(userWithId.isAdmin ? 'admin' : 'user');
@@ -258,7 +258,7 @@ export const AppProvider = ({ children }) => {
           totalVisits: (currentUser.totalVisits || 0) + 1,
         };
         setCurrentUser(updatedUser);
-        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        sessionStorage.setItem('currentUser', JSON.stringify(updatedUser));
       }
 
       return { 
@@ -291,7 +291,7 @@ export const AppProvider = ({ children }) => {
         };
 
         setCurrentUser(updatedUser);
-        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        sessionStorage.setItem('currentUser', JSON.stringify(updatedUser));
 
         console.log('✅ User updated with new payment info');
         return { success: true };
@@ -306,9 +306,9 @@ export const AppProvider = ({ children }) => {
 
   const handleSignOut = () => {
     console.log('👋 Signing out...');
-    localStorage.removeItem('token');
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('userType');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('currentUser');
+    sessionStorage.removeItem('userType');
     setCurrentUser(null);
     setUserType(null);
     setIsAuthenticated(false);
