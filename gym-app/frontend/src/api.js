@@ -13,9 +13,9 @@ const secureStorage = {
     
     // In production, consider encrypting the token before storing
     try {
-      localStorage.setItem('token', token);
+      sessionStorage.setItem('token', token);
       // Set expiry timestamp
-      localStorage.setItem('tokenExpiry', Date.now() + (24 * 60 * 60 * 1000)); // 24 hours
+      sessionStorage.setItem('tokenExpiry', Date.now() + (24 * 60 * 60 * 1000)); // 24 hours
     } catch (error) {
       console.error('Failed to store token:', error);
     }
@@ -23,8 +23,8 @@ const secureStorage = {
   
   getToken: () => {
     try {
-      const token = localStorage.getItem('token');
-      const expiry = localStorage.getItem('tokenExpiry');
+      const token = sessionStorage.getItem('token');
+      const expiry = sessionStorage.getItem('tokenExpiry');
       
       // Check if token is expired
       if (expiry && Date.now() > parseInt(expiry)) {
@@ -42,10 +42,10 @@ const secureStorage = {
   
   removeToken: () => {
     try {
-      localStorage.removeItem('token');
-      localStorage.removeItem('tokenExpiry');
-      localStorage.removeItem('currentUser');
-      localStorage.removeItem('userType');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('tokenExpiry');
+      sessionStorage.removeItem('currentUser');
+      sessionStorage.removeItem('userType');
     } catch (error) {
       console.error('Failed to remove token:', error);
     }
