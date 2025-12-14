@@ -19,7 +19,7 @@ const api = axios.create({
 // Request Interceptor
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (token) {
       config.headers['x-auth-token'] = token;
     }
@@ -65,9 +65,9 @@ api.interceptors.response.use(
     // Handle 401 Unauthorized
     if (error.response?.status === 401) {
       console.log('🔒 Unauthorized - clearing auth data');
-      localStorage.removeItem('token');
-      localStorage.removeItem('currentUser');
-      localStorage.removeItem('userType');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('currentUser');
+      sessionStorage.removeItem('userType');
       
       // Only redirect if not already on login page
       if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
