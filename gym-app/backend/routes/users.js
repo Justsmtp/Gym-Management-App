@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const { checkAndUpdateMembershipStatus, checkMultipleMemberships, runBulkMembershipCheck } = require('../utils/membershipChecker');
 
 // Middleware to check if user is admin
 const adminAuth = async (req, res, next) => {
@@ -18,16 +19,19 @@ const adminAuth = async (req, res, next) => {
 };
 
 // @route   GET /api/users
-// @desc    Get all users (Admin only)
+// @desc    Get all users (Admin only) - WITH STATUS CHECK
 router.get('/', auth, adminAuth, async (req, res) => {
   try {
     console.log('📊 Fetching all users...');
 
-    const users = await User.find({ isAdmin: false })
+    let users = await User.find({ isAdmin: false })
       .select('-password -verificationToken')
       .sort({ createdAt: -1 });
 
-    console.log(`✅ Found ${users.length} users`);
+    // CHECK AND UPDATE ALL USERS' STATUS
+    users = await checkMultipleMemberships(users);
+
+    console.log(`✅ Found ${users.length} users (statuses updated)`);
 
     res.json({
       success: true,
@@ -40,15 +44,36 @@ router.get('/', auth, adminAuth, async (req, res) => {
   }
 });
 
+// @route   POST /api/users/check-memberships
+// @desc    Manually check all memberships (Admin only)
+router.post('/check-memberships', auth, adminAuth, async (req, res) => {
+  try {
+    console.log('🔄 Admin triggered manual membership check');
+    const result = await runBulkMembershipCheck();
+
+    res.json({
+      success: true,
+      message: 'Membership status check completed',
+      result
+    });
+  } catch (err) {
+    console.error('❌ Error checking memberships:', err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   GET /api/users/:id
-// @desc    Get user by ID (Admin only)
+// @desc    Get user by ID (Admin only) - WITH STATUS CHECK
 router.get('/:id', auth, adminAuth, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password -verificationToken');
+    let user = await User.findById(req.params.id).select('-password -verificationToken');
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+
+    // CHECK AND UPDATE STATUS
+    user = await checkAndUpdateMembershipStatus(user);
 
     res.json({
       success: true,
