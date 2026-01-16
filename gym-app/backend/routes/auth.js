@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/mailer');
+const { checkAndUpdateMembershipStatus } = require('../utils/membershipChecker');
 
 const membershipDetails = {
   'Walk-in': { price: 5000, duration: 1 },
@@ -261,7 +262,7 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-// POST /api/auth/login
+// POST /api/auth/login - CHECK STATUS ON LOGIN
 router.post('/login', async (req, res) => {
   try {
     const { email, password, isAdmin } = req.body;
@@ -269,7 +270,7 @@ router.post('/login', async (req, res) => {
     
     if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    let user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
 
     if (isAdmin && !user.isAdmin) {
@@ -283,13 +284,16 @@ router.post('/login', async (req, res) => {
     const match = await user.comparePassword(password);
     if (!match) return res.status(400).json({ message: 'Invalid credentials' });
 
+    // CHECK AND UPDATE MEMBERSHIP STATUS
+    user = await checkAndUpdateMembershipStatus(user);
+
     const token = jwt.sign(
       { user: { id: user._id, isAdmin: user.isAdmin } }, 
       process.env.JWT_SECRET || 'secret', 
       { expiresIn: '30d' }
     );
 
-    console.log('✅ Login successful:', email);
+    console.log('✅ Login successful:', email, '- Status:', user.status);
 
     res.json({
       success: true,
@@ -304,6 +308,8 @@ router.post('/login', async (req, res) => {
         paymentStatus: user.paymentStatus,
         isVerified: user.isVerified,
         status: user.status,
+        isActive: user.isActive,
+        membershipEndDate: user.membershipEndDate,
         nextDueDate: user.nextDueDate,
       },
     });
@@ -313,15 +319,18 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// GET /api/auth/me
+// GET /api/auth/me - CHECK STATUS WHEN FETCHING USER
 router.get('/me', async (req, res) => {
   try {
     const token = req.header('x-auth-token');
     if (!token) return res.status(401).json({ message: 'No token' });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-    const user = await User.findById(decoded.user.id).select('-password -verificationToken -resetPasswordToken');
+    let user = await User.findById(decoded.user.id).select('-password -verificationToken -resetPasswordToken');
     if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // CHECK AND UPDATE STATUS
+    user = await checkAndUpdateMembershipStatus(user);
 
     res.json(user);
   } catch (err) {
@@ -355,13 +364,16 @@ router.put('/update-profile', async (req, res) => {
       return res.status(400).json({ message: 'Email already in use' });
     }
 
-    const user = await User.findById(decoded.user.id);
+    let user = await User.findById(decoded.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     user.name = name;
     user.email = email.toLowerCase();
     user.phone = phone;
     await user.save();
+
+    // CHECK STATUS AFTER UPDATE
+    user = await checkAndUpdateMembershipStatus(user);
 
     console.log('✅ Profile updated:', user.email);
 
@@ -378,7 +390,9 @@ router.put('/update-profile', async (req, res) => {
         barcode: user.barcode,
         isAdmin: user.isAdmin,
         isVerified: user.isVerified,
+        isActive: user.isActive,
         paymentStatus: user.paymentStatus,
+        membershipEndDate: user.membershipEndDate,
         nextDueDate: user.nextDueDate,
       }
     });
