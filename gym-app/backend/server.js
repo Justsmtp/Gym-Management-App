@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
 
 // Import reminder scheduler
 const { startReminderScheduler } = require('./services/reminderScheduler');
@@ -192,6 +193,14 @@ app.use(express.urlencoded({
 }));
 
 // ============================================
+// STATIC FILE SERVING FOR UPLOADS
+// ============================================
+
+// Serve uploaded files (profile pictures)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+console.log('📁 Static file serving enabled for /uploads directory');
+
+// ============================================
 // REQUEST LOGGING MIDDLEWARE
 // ============================================
 
@@ -322,7 +331,8 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     reminders: 'active',
     mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    uploads: 'enabled'
   });
 });
 
@@ -386,7 +396,8 @@ app.get('/', (req, res) => {
       payments: '/api/payments',
       attendance: '/api/attendance',
       reminders: '/api/reminders',
-      plans: '/api/plans'
+      plans: '/api/plans',
+      uploads: '/uploads'
     }
   });
 });
@@ -487,9 +498,15 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('  ✅ CORS Policy');
   console.log('  ✅ Request Size Limits');
   console.log('  ✅ Security Logging');
+  console.log('  ✅ Static File Serving (Profile Pictures)');
   console.log('');
   console.log('📧 Email Reminders: ACTIVE');
   console.log('⏰ Schedule: Daily at 9:00 AM');
+  console.log('');
+  console.log('📁 File Upload:');
+  console.log('  ✅ Profile Pictures Enabled');
+  console.log('  📂 Upload Directory: /uploads/profile-pictures');
+  console.log('  🔗 Access URL: /uploads/profile-pictures/<filename>');
   console.log('');
   console.log('Press Ctrl+C to stop');
   console.log('');
