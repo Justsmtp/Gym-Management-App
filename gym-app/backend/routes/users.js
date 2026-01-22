@@ -1,9 +1,53 @@
 // backend/routes/users.js
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 const { checkAndUpdateMembershipStatus, checkMultipleMemberships, runBulkMembershipCheck } = require('../utils/membershipChecker');
+
+// ============================================
+// MULTER CONFIGURATION FOR PROFILE PICTURES
+// ============================================
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '..', 'uploads', 'profile-pictures');
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    // Create unique filename: userId-timestamp-originalname
+    const uniqueName = `${req.user.id}-${Date.now()}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  }
+});
+
+// File filter to accept only images
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only image files are allowed!'), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
+
+// ============================================
+// ADMIN AUTH MIDDLEWARE
+// ============================================
 
 // Middleware to check if user is admin
 const adminAuth = async (req, res, next) => {
@@ -17,6 +61,118 @@ const adminAuth = async (req, res, next) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// ============================================
+// PROFILE PICTURE ROUTES
+// ============================================
+
+// @route   POST /api/users/upload-profile-picture
+// @desc    Upload profile picture (User only)
+router.post('/upload-profile-picture', auth, upload.single('profilePicture'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      // Clean up uploaded file
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Delete old profile picture if exists
+    if (user.profilePicture) {
+      const oldPath = path.join(__dirname, '..', user.profilePicture);
+      if (fs.existsSync(oldPath)) {
+        try {
+          fs.unlinkSync(oldPath);
+          console.log('🗑️ Deleted old profile picture');
+        } catch (err) {
+          console.error('Error deleting old picture:', err);
+        }
+      }
+    }
+
+    // Update user with new profile picture path
+    const profilePicturePath = `/uploads/profile-pictures/${req.file.filename}`;
+    user.profilePicture = profilePicturePath;
+    await user.save();
+
+    console.log(`✅ Profile picture uploaded for user: ${user.name}`);
+
+    res.json({
+      success: true,
+      message: 'Profile picture uploaded successfully',
+      profilePicture: profilePicturePath,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        profilePicture: user.profilePicture
+      }
+    });
+
+  } catch (error) {
+    console.error('Profile picture upload error:', error);
+    
+    // Clean up uploaded file if there was an error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    
+    res.status(500).json({ 
+      message: 'Failed to upload profile picture', 
+      error: error.message 
+    });
+  }
+});
+
+// @route   DELETE /api/users/delete-profile-picture
+// @desc    Delete profile picture (User only)
+router.delete('/delete-profile-picture', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Delete file from filesystem
+    if (user.profilePicture) {
+      const filePath = path.join(__dirname, '..', user.profilePicture);
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+          console.log('🗑️ Profile picture deleted from filesystem');
+        } catch (err) {
+          console.error('Error deleting file:', err);
+        }
+      }
+    }
+
+    // Remove from database
+    user.profilePicture = null;
+    await user.save();
+
+    console.log(`✅ Profile picture removed for user: ${user.name}`);
+
+    res.json({
+      success: true,
+      message: 'Profile picture deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Profile picture delete error:', error);
+    res.status(500).json({ 
+      message: 'Failed to delete profile picture', 
+      error: error.message 
+    });
+  }
+});
+
+// ============================================
+// EXISTING USER ROUTES
+// ============================================
 
 // @route   GET /api/users
 // @desc    Get all users (Admin only) - WITH STATUS CHECK
@@ -189,11 +345,26 @@ router.get('/stats/summary', auth, adminAuth, async (req, res) => {
 // @desc    Delete user (Admin only)
 router.delete('/:id', auth, adminAuth, async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
+    const user = await User.findById(req.params.id);
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+
+    // Delete profile picture if exists
+    if (user.profilePicture) {
+      const filePath = path.join(__dirname, '..', user.profilePicture);
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+          console.log('🗑️ Deleted user profile picture');
+        } catch (err) {
+          console.error('Error deleting profile picture:', err);
+        }
+      }
+    }
+
+    await User.findByIdAndDelete(req.params.id);
 
     console.log(`🗑️ User deleted: ${user.name}`);
 
