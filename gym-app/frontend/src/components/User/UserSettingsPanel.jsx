@@ -1,6 +1,6 @@
 // frontend/src/components/User/UserSettingsPanel.jsx
 import React, { useState, useEffect } from 'react';
-import { User, Bell, Lock, CreditCard, Mail, Phone, Save, Eye, EyeOff } from 'lucide-react';
+import { User, Bell, Lock, CreditCard, Mail, Phone, Save, Eye, EyeOff, Camera, Upload, X, Check } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import API from '../../api/api';
 
@@ -9,6 +9,13 @@ const UserSettingsPanel = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Profile Picture Upload States
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const [profileData, setProfileData] = useState({
     name: '',
@@ -38,6 +45,105 @@ const UserSettingsPanel = () => {
       });
     }
   }, [currentUser]);
+
+  // Profile Picture Upload Handlers
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please select an image file');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Image size should be less than 5MB');
+      return;
+    }
+
+    setSelectedFile(file);
+    setUploadError(null);
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreviewUrl(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+
+    setUploading(true);
+    setUploadError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('profilePicture', selectedFile);
+
+      const response = await API.post('/users/upload-profile-picture', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.success) {
+        setUploadSuccess(true);
+        
+        // Update current user with new profile picture
+        const updatedUser = {
+          ...currentUser,
+          profilePicture: response.data.profilePicture
+        };
+        setCurrentUser(updatedUser);
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+
+        setTimeout(() => {
+          setUploadSuccess(false);
+          setSelectedFile(null);
+          setPreviewUrl(null);
+        }, 2000);
+      }
+
+    } catch (err) {
+      setUploadError(err.response?.data?.message || 'Failed to upload image');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setUploadError(null);
+  };
+
+  const handleDeletePicture = async () => {
+    if (!window.confirm('Are you sure you want to remove your profile picture?')) {
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const response = await API.delete('/users/delete-profile-picture');
+      
+      if (response.data.success) {
+        const updatedUser = {
+          ...currentUser,
+          profilePicture: null
+        };
+        setCurrentUser(updatedUser);
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        
+        setUploadSuccess(true);
+        setTimeout(() => setUploadSuccess(false), 2000);
+      }
+    } catch (err) {
+      setUploadError(err.response?.data?.message || 'Failed to delete picture');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
@@ -119,6 +225,126 @@ const UserSettingsPanel = () => {
           </div>
         </div>
       )}
+
+      {/* Profile Picture Section */}
+      <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
+        <div className="flex items-center mb-4 md:mb-6">
+          <Camera className="mr-2 md:mr-3" size={20} />
+          <h3 className="text-lg md:text-xl font-bold text-black">Profile Picture</h3>
+        </div>
+        
+        <div className="space-y-4">
+          <div className="text-center">
+            <div className="relative inline-block">
+              {previewUrl || currentUser?.profilePicture ? (
+                <img
+                  src={previewUrl || currentUser.profilePicture}
+                  alt="Profile"
+                  className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-4 border-gray-200"
+                />
+              ) : (
+                <div className="w-32 h-32 md:w-40 md:h-40 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200">
+                  <span className="text-white text-4xl md:text-5xl font-bold">
+                    {currentUser?.name?.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+
+              <label
+                htmlFor="profile-picture-input"
+                className="absolute bottom-0 right-0 w-12 h-12 bg-black text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-gray-800 transition shadow-lg"
+              >
+                <Camera size={20} />
+              </label>
+              
+              <input
+                id="profile-picture-input"
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+                disabled={uploading}
+              />
+            </div>
+
+            <p className="mt-4 text-sm text-gray-600">
+              Click the camera icon to upload a new photo
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              JPG, PNG or GIF. Max size 5MB
+            </p>
+          </div>
+
+          {/* Upload Error Message */}
+          {uploadError && (
+            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3 flex items-center gap-2">
+              <X size={18} className="text-red-600 flex-shrink-0" />
+              <p className="text-sm text-red-700">{uploadError}</p>
+            </div>
+          )}
+
+          {/* Upload Success Message */}
+          {uploadSuccess && (
+            <div className="bg-green-50 border-2 border-green-200 rounded-lg p-3 flex items-center gap-2">
+              <Check size={18} className="text-green-600 flex-shrink-0" />
+              <p className="text-sm text-green-700">Profile picture updated successfully!</p>
+            </div>
+          )}
+
+          {/* Upload Actions */}
+          {selectedFile && !uploadSuccess && (
+            <div className="space-y-3">
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800 font-semibold mb-1">
+                  Selected: {selectedFile.name}
+                </p>
+                <p className="text-xs text-blue-600">
+                  Size: {(selectedFile.size / 1024).toFixed(2)} KB
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleUpload}
+                  disabled={uploading}
+                  className="flex-1 bg-black text-white py-3 px-4 rounded-lg font-semibold hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {uploading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                      <span>Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={18} />
+                      <span>Upload Photo</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleCancel}
+                  disabled={uploading}
+                  className="px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Picture Button */}
+          {currentUser?.profilePicture && !selectedFile && (
+            <button
+              onClick={handleDeletePicture}
+              disabled={uploading}
+              className="w-full mt-4 px-4 py-3 border-2 border-red-500 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition disabled:opacity-50"
+            >
+              {uploading ? 'Removing...' : 'Remove Profile Picture'}
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Profile Information */}
       <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
