@@ -83,10 +83,16 @@ router.post('/upload-profile-picture', auth, upload.single('profilePicture'), as
 
     // Delete old profile picture if exists
     if (user.profilePicture) {
-      const oldPath = path.join(__dirname, '..', user.profilePicture);
-      if (fs.existsSync(oldPath)) {
+      // Extract just the path part if it's a full URL
+      const oldPath = user.profilePicture.includes('http') 
+        ? user.profilePicture.split('/uploads/')[1] 
+        : user.profilePicture.replace('/uploads/', '');
+      
+      const fullOldPath = path.join(__dirname, '..', 'uploads', oldPath);
+      
+      if (fs.existsSync(fullOldPath)) {
         try {
-          fs.unlinkSync(oldPath);
+          fs.unlinkSync(fullOldPath);
           console.log('🗑️ Deleted old profile picture');
         } catch (err) {
           console.error('Error deleting old picture:', err);
@@ -94,22 +100,26 @@ router.post('/upload-profile-picture', auth, upload.single('profilePicture'), as
       }
     }
 
-    // Update user with new profile picture path
+    // Create full URL for the profile picture
     const profilePicturePath = `/uploads/profile-pictures/${req.file.filename}`;
-    user.profilePicture = profilePicturePath;
+    const baseUrl = process.env.API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const fullUrl = `${baseUrl}${profilePicturePath}`;
+    
+    user.profilePicture = fullUrl;
     await user.save();
 
     console.log(`✅ Profile picture uploaded for user: ${user.name}`);
+    console.log(`📸 Picture URL: ${fullUrl}`);
 
     res.json({
       success: true,
       message: 'Profile picture uploaded successfully',
-      profilePicture: profilePicturePath,
+      profilePicture: fullUrl,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
-        profilePicture: user.profilePicture
+        profilePicture: fullUrl
       }
     });
 
@@ -139,10 +149,16 @@ router.delete('/delete-profile-picture', auth, async (req, res) => {
 
     // Delete file from filesystem
     if (user.profilePicture) {
-      const filePath = path.join(__dirname, '..', user.profilePicture);
-      if (fs.existsSync(filePath)) {
+      // Extract just the path part if it's a full URL
+      const filePath = user.profilePicture.includes('http') 
+        ? user.profilePicture.split('/uploads/')[1] 
+        : user.profilePicture.replace('/uploads/', '');
+      
+      const fullFilePath = path.join(__dirname, '..', 'uploads', filePath);
+      
+      if (fs.existsSync(fullFilePath)) {
         try {
-          fs.unlinkSync(filePath);
+          fs.unlinkSync(fullFilePath);
           console.log('🗑️ Profile picture deleted from filesystem');
         } catch (err) {
           console.error('Error deleting file:', err);
@@ -353,10 +369,16 @@ router.delete('/:id', auth, adminAuth, async (req, res) => {
 
     // Delete profile picture if exists
     if (user.profilePicture) {
-      const filePath = path.join(__dirname, '..', user.profilePicture);
-      if (fs.existsSync(filePath)) {
+      // Extract just the path part if it's a full URL
+      const filePath = user.profilePicture.includes('http') 
+        ? user.profilePicture.split('/uploads/')[1] 
+        : user.profilePicture.replace('/uploads/', '');
+      
+      const fullFilePath = path.join(__dirname, '..', 'uploads', filePath);
+      
+      if (fs.existsSync(fullFilePath)) {
         try {
-          fs.unlinkSync(filePath);
+          fs.unlinkSync(fullFilePath);
           console.log('🗑️ Deleted user profile picture');
         } catch (err) {
           console.error('Error deleting profile picture:', err);
