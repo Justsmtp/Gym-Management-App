@@ -98,6 +98,8 @@ const UserSettingsPanel = () => {
         setCurrentUser(updatedUser);
         localStorage.setItem('currentUser', JSON.stringify(updatedUser));
 
+        console.log('✅ Profile picture uploaded:', response.data.profilePicture);
+
         setTimeout(() => {
           setUploadSuccess(false);
           setSelectedFile(null);
@@ -106,6 +108,7 @@ const UserSettingsPanel = () => {
       }
 
     } catch (err) {
+      console.error('Upload error:', err);
       setUploadError(err.response?.data?.message || 'Failed to upload image');
     } finally {
       setUploading(false);
@@ -241,6 +244,10 @@ const UserSettingsPanel = () => {
                   src={previewUrl || currentUser.profilePicture}
                   alt="Profile"
                   className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-4 border-gray-200"
+                  onError={(e) => {
+                    console.error('Image load error');
+                    e.target.style.display = 'none';
+                  }}
                 />
               ) : (
                 <div className="w-32 h-32 md:w-40 md:h-40 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200">
