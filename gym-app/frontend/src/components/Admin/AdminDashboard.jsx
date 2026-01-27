@@ -89,7 +89,7 @@ const AdminDashboard = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar - Desktop: always visible, Mobile: hidden by default */}
+      {/* Sidebar */}
       <aside className={`
         fixed top-0 left-0 bottom-0 w-64 z-40
         transform transition-transform duration-300 ease-in-out
@@ -104,7 +104,7 @@ const AdminDashboard = () => {
         />
       </aside>
 
-      {/* Overlay - only visible on mobile when sidebar is open */}
+      {/* Overlay */}
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
@@ -118,7 +118,6 @@ const AdminDashboard = () => {
         <header className="bg-black text-white p-4 md:p-6">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between gap-3">
-              {/* Mobile Menu Button */}
               <button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 className="lg:hidden p-2 hover:bg-gray-800 rounded-lg transition"
@@ -127,7 +126,6 @@ const AdminDashboard = () => {
                 {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
               </button>
 
-              {/* Title */}
               <div className="flex-1">
                 <h1 className="text-xl md:text-2xl font-bold">
                   {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
@@ -137,7 +135,6 @@ const AdminDashboard = () => {
                 </p>
               </div>
 
-              {/* Refresh Button */}
               <button
                 onClick={fetchAllData}
                 disabled={loading}
@@ -235,12 +232,26 @@ const OverviewTab = ({ stats, users, payments }) => {
           ) : (
             <div className="space-y-2 md:space-y-3">
               {recentUsers.map((user) => (
-                <div key={user._id} className="flex justify-between items-center p-2 md:p-3 bg-gray-50 rounded-lg">
+                <div key={user._id} className="flex items-center gap-3 p-2 md:p-3 bg-gray-50 rounded-lg">
+                  {user.profilePicture ? (
+                    <img
+                      src={user.profilePicture}
+                      alt={user.name}
+                      className="w-10 h-10 rounded-full object-cover border-2 border-gray-200 flex-shrink-0"
+                      onError={(e) => e.target.style.display = 'none'}
+                    />
+                  ) : (
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white text-sm font-bold">
+                        {user.name?.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-black text-sm md:text-base truncate">{user.name}</p>
                     <p className="text-xs text-gray-600 truncate">{user.email}</p>
                   </div>
-                  <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ml-2 ${
+                  <span className={`px-2 md:px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
                     user.status === 'active' ? 'bg-green-100 text-green-800' :
                     user.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                     'bg-red-100 text-red-800'
@@ -260,7 +271,21 @@ const OverviewTab = ({ stats, users, payments }) => {
           ) : (
             <div className="space-y-2 md:space-y-3">
               {recentPayments.map((payment) => (
-                <div key={payment._id} className="flex justify-between items-center p-2 md:p-3 bg-gray-50 rounded-lg">
+                <div key={payment._id} className="flex items-center gap-3 p-2 md:p-3 bg-gray-50 rounded-lg">
+                  {payment.user?.profilePicture ? (
+                    <img
+                      src={payment.user.profilePicture}
+                      alt={payment.user.name}
+                      className="w-10 h-10 rounded-full object-cover border-2 border-gray-200 flex-shrink-0"
+                      onError={(e) => e.target.style.display = 'none'}
+                    />
+                  ) : (
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white text-sm font-bold">
+                        {payment.user?.name?.charAt(0).toUpperCase() || 'U'}
+                      </span>
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-black text-sm md:text-base">
                       {payment.user?.name || 'Unknown User'}
@@ -269,7 +294,7 @@ const OverviewTab = ({ stats, users, payments }) => {
                       ₦{payment.amount?.toLocaleString()} • {payment.membershipType}
                     </p>
                   </div>
-                  <div className="text-right ml-2">
+                  <div className="text-right">
                     <p className="text-xs text-gray-600 whitespace-nowrap">
                       {new Date(payment.createdAt).toLocaleDateString()}
                     </p>
@@ -333,7 +358,7 @@ const UsersTab = ({ users, refreshData }) => {
             <table className="w-full min-w-[640px]">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Name</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">User</th>
                   <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Email</th>
                   <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Membership</th>
                   <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Status</th>
@@ -342,7 +367,25 @@ const UsersTab = ({ users, refreshData }) => {
               <tbody>
                 {filteredUsers.map((user) => (
                   <tr key={user._id} className="border-b hover:bg-gray-50">
-                    <td className="py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-semibold">{user.name}</td>
+                    <td className="py-2 md:py-3 px-2 md:px-4">
+                      <div className="flex items-center gap-2">
+                        {user.profilePicture ? (
+                          <img
+                            src={user.profilePicture}
+                            alt={user.name}
+                            className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover border-2 border-gray-200"
+                            onError={(e) => e.target.style.display = 'none'}
+                          />
+                        ) : (
+                          <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xs md:text-sm font-bold">
+                              {user.name?.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
+                        <p className="text-xs md:text-sm font-semibold">{user.name}</p>
+                      </div>
+                    </td>
                     <td className="py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm">{user.email}</td>
                     <td className="py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm">{user.membershipType}</td>
                     <td className="py-2 md:py-3 px-2 md:px-4">
@@ -365,7 +408,7 @@ const UsersTab = ({ users, refreshData }) => {
   );
 };
 
-// Payments Tab - UPDATED WITH USER NAMES
+// Payments Tab
 const PaymentsTab = ({ payments }) => {
   const [filterMethod, setFilterMethod] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -481,6 +524,7 @@ const PaymentsTab = ({ payments }) => {
                             src={payment.user.profilePicture}
                             alt={payment.user.name}
                             className="w-8 h-8 rounded-full object-cover"
+                            onError={(e) => e.target.style.display = 'none'}
                           />
                         ) : (
                           <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
@@ -539,7 +583,6 @@ const PaymentsTab = ({ payments }) => {
     </div>
   );
 };
-
 // Stat Card
 const StatCard = ({ title, value, subtitle, icon, color }) => {
   const colorClasses = {
