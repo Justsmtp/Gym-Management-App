@@ -8,15 +8,19 @@ import AdminSidebar from './AdminSidebar';
 import AdminSettingsPanel from './AdminSettingsPanel';
 import AttendanceManagement from './AttendanceManagement';
 
-// Reusable Profile Picture Component with Error Handling
+// Reusable Profile Picture Component with Persistent Error Handling
 const ProfilePicture = ({ user, size = 'md', className = '' }) => {
-  const [hasError, setHasError] = useState(false);
-  const profilePic = user?.profilePicture;
-
-  // Reset error state when profile picture URL changes
+  const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  
+  // Key that changes when user or profilePicture changes
+  const imageKey = `${user?._id}-${user?.profilePicture}`;
+  
+  // Reset state when user or profile picture changes
   useEffect(() => {
-    setHasError(false);
-  }, [profilePic]);
+    setImageError(false);
+    setImageLoaded(false);
+  }, [imageKey]);
 
   const sizeClasses = {
     sm: 'w-8 h-8 text-xs',
@@ -25,31 +29,48 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
     xl: 'w-20 h-20 text-2xl'
   };
 
-  const handleImageError = () => {
-    console.error('Failed to load profile picture:', profilePic);
-    setHasError(true);
+  const handleImageError = (e) => {
+    console.warn('Image load failed for user:', user?.name, 'URL:', user?.profilePicture);
+    setImageError(true);
+    e.target.style.display = 'none';
   };
 
-  // Show image if URL exists and no error
-  if (profilePic && !hasError) {
+  const handleImageLoad = () => {
+    setImageLoaded(true);
+  };
+
+  // Show avatar if: no picture, error loading, or invalid URL
+  const shouldShowAvatar = !user?.profilePicture || imageError || !user.profilePicture.startsWith('http');
+
+  if (shouldShowAvatar) {
     return (
-      <img 
-        src={profilePic}
-        alt={user?.name || 'User'}
-        className={`${sizeClasses[size]} rounded-full object-cover border-2 border-gray-200 ${className}`}
-        onError={handleImageError}
-        loading="lazy"
-      />
+      <div 
+        className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-2 border-gray-200 flex-shrink-0 ${className}`}
+        title={user?.name || 'User'}
+      >
+        <span className="text-white font-bold">
+          {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+        </span>
+      </div>
     );
   }
 
-  // Fallback to avatar with initials
   return (
-    <div className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-2 border-gray-200 ${className}`}>
-      <span className="text-white font-bold">
-        {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-      </span>
-    </div>
+    <>
+      {!imageLoaded && (
+        <div className={`${sizeClasses[size]} bg-gray-200 rounded-full animate-pulse border-2 border-gray-200 flex-shrink-0 ${className}`} />
+      )}
+      <img 
+        key={imageKey}
+        src={user.profilePicture}
+        alt={user?.name || 'User'}
+        className={`${sizeClasses[size]} rounded-full object-cover border-2 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
+        onError={handleImageError}
+        onLoad={handleImageLoad}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+      />
+    </>
   );
 };
 
@@ -266,20 +287,7 @@ const UserDetailModal = ({ user, onClose }) => {
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              {user.profilePicture ? (
-                <img
-                  src={user.profilePicture}
-                  alt={user.name}
-                  className="w-20 h-20 rounded-full object-cover border-4 border-white"
-                  onError={(e) => e.target.style.display = 'none'}
-                />
-              ) : (
-                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center">
-                  <span className="text-purple-600 text-3xl font-bold">
-                    {user.name?.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              )}
+              <ProfilePicture user={user} size="xl" className="border-4 border-white" />
               <div>
                 <h2 className="text-2xl font-bold text-white">{user.name}</h2>
                 <p className="text-white opacity-90">{user.membershipType} Member</p>
@@ -452,20 +460,7 @@ const OverviewTab = ({ stats, users, payments, onViewUser }) => {
                   className="flex items-center gap-3 p-2 md:p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer"
                   onClick={() => onViewUser(user)}
                 >
-                  {user.profilePicture ? (
-                    <img
-                      src={user.profilePicture}
-                      alt={user.name}
-                      className="w-10 h-10 rounded-full object-cover border-2 border-gray-200 flex-shrink-0"
-                      onError={(e) => e.target.style.display = 'none'}
-                    />
-                  ) : (
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-white text-sm font-bold">
-                        {user.name?.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
+                  <ProfilePicture user={user} size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-black text-sm md:text-base truncate">{user.name}</p>
                     <p className="text-xs text-gray-600 truncate">{user.email}</p>
@@ -495,20 +490,7 @@ const OverviewTab = ({ stats, users, payments, onViewUser }) => {
                   className="flex items-center gap-3 p-2 md:p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer"
                   onClick={() => payment.user && onViewUser(payment.user)}
                 >
-                  {payment.user?.profilePicture ? (
-                    <img
-                      src={payment.user.profilePicture}
-                      alt={payment.user.name}
-                      className="w-10 h-10 rounded-full object-cover border-2 border-gray-200 flex-shrink-0"
-                      onError={(e) => e.target.style.display = 'none'}
-                    />
-                  ) : (
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-white text-sm font-bold">
-                        {payment.user?.name?.charAt(0).toUpperCase() || 'U'}
-                      </span>
-                    </div>
-                  )}
+                  <ProfilePicture user={payment.user} size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-black text-sm md:text-base">
                       {payment.user?.name || 'Unknown User'}
@@ -593,20 +575,7 @@ const UsersTab = ({ users, refreshData, onViewUser }) => {
                   <tr key={user._id} className="border-b hover:bg-gray-50">
                     <td className="py-2 md:py-3 px-2 md:px-4">
                       <div className="flex items-center gap-2">
-                        {user.profilePicture ? (
-                          <img
-                            src={user.profilePicture}
-                            alt={user.name}
-                            className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover border-2 border-gray-200"
-                            onError={(e) => e.target.style.display = 'none'}
-                          />
-                        ) : (
-                          <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                            <span className="text-white text-xs md:text-sm font-bold">
-                              {user.name?.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                        )}
+                        <ProfilePicture user={user} size="sm" />
                         <p className="text-xs md:text-sm font-semibold">{user.name}</p>
                       </div>
                     </td>
@@ -752,20 +721,7 @@ const PaymentsTab = ({ payments, onViewUser }) => {
                   <tr key={payment._id} className="border-b hover:bg-gray-50">
                     <td className="py-2 md:py-3 px-2 md:px-4">
                       <div className="flex items-center gap-2">
-                        {payment.user?.profilePicture ? (
-                          <img
-                            src={payment.user.profilePicture}
-                            alt={payment.user.name}
-                            className="w-8 h-8 rounded-full object-cover"
-                            onError={(e) => e.target.style.display = 'none'}
-                          />
-                        ) : (
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                            <span className="text-white text-xs font-bold">
-                              {payment.user?.name?.charAt(0).toUpperCase() || 'U'}
-                            </span>
-                          </div>
-                        )}
+                        <ProfilePicture user={payment.user} size="sm" />
                         <div>
                           <p className="text-xs md:text-sm font-semibold text-black">
                             {payment.user?.name || 'Unknown User'}
@@ -816,6 +772,7 @@ const PaymentsTab = ({ payments, onViewUser }) => {
     </div>
   );
 };
+
 // Stat Card
 const StatCard = ({ title, value, subtitle, icon, color }) => {
   const colorClasses = {
