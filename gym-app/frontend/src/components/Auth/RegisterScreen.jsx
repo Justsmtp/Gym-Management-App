@@ -280,7 +280,7 @@ const RegisterScreen = () => {
                             value={gender}
                             checked={formData.gender === gender}
                             onChange={(e) => handleInputChange('gender', e.target.value)}
-                            className="w-4 h-4 accent-white"
+                            className="w-4 h-4 accent-blue"
                           />
                           <span className="text-white">{gender}</span>
                         </label>
@@ -404,7 +404,7 @@ const RegisterScreen = () => {
               {formStep === 2 && (
                 <div className="space-y-4">
                   <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-4">
-                    <p className="text-sm text-blue-200 flex items-center gap-2">
+                    <p className="text-sm text-blue-500 flex items-center gap-2">
                       <Heart size={16} />
                       Please answer honestly. This helps ensure your safety during physical activity.
                     </p>
@@ -510,7 +510,7 @@ const RegisterScreen = () => {
                             value={freq}
                             checked={formData.exerciseFrequency === freq}
                             onChange={(e) => handleInputChange('exerciseFrequency', e.target.value)}
-                            className="w-4 h-4 accent-white"
+                            className="w-4 h-4 accent-blue"
                           />
                           <span className="text-white">{freq}</span>
                         </label>
@@ -562,7 +562,7 @@ const RegisterScreen = () => {
                         <p className="text-white font-bold mb-1">
                           I agree to the above declaration *
                         </p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text--400">
                           By checking this box, you electronically sign this declaration on {new Date().toLocaleDateString()}
                         </p>
                       </div>
@@ -639,7 +639,7 @@ const YesNoQuestion = ({ label, sublabel, value, onChange, details, onDetailsCha
             value="Yes"
             checked={value === 'Yes'}
             onChange={(e) => onChange(e.target.value)}
-            className="w-4 h-4 accent-white"
+            className="w-4 h-4 accent-blue"
           />
           <span className="text-white">Yes</span>
         </label>
@@ -649,7 +649,7 @@ const YesNoQuestion = ({ label, sublabel, value, onChange, details, onDetailsCha
             value="No"
             checked={value === 'No'}
             onChange={(e) => onChange(e.target.value)}
-            className="w-4 h-4 accent-white"
+            className="w-4 h-4 accent-blue"
           />
           <span className="text-white">No</span>
         </label>
