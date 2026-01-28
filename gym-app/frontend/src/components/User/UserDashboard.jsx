@@ -17,15 +17,19 @@ const UserDashboard = () => {
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Profile Picture Component with persistent error handling
+  // Profile Picture Component with Persistent Error Handling
   const ProfilePicture = ({ user, size = 'md', className = '' }) => {
-    const [hasError, setHasError] = useState(false);
-    const profilePic = user?.profilePicture;
-
-    // Reset error state when profile picture URL changes
+    const [imageError, setImageError] = useState(false);
+    const [imageLoaded, setImageLoaded] = useState(false);
+    
+    // Key that changes when user or profilePicture changes
+    const imageKey = `${user?._id}-${user?.profilePicture}`;
+    
+    // Reset state when user or profile picture changes
     useEffect(() => {
-      setHasError(false);
-    }, [profilePic]);
+      setImageError(false);
+      setImageLoaded(false);
+    }, [imageKey]);
 
     const sizeClasses = {
       sm: 'w-10 h-10 text-sm',
@@ -34,33 +38,50 @@ const UserDashboard = () => {
       xl: 'w-24 h-24 md:w-32 md:h-32 text-3xl md:text-4xl'
     };
 
-    const handleImageError = () => {
-      console.error('Failed to load profile picture:', profilePic);
-      setHasError(true);
+    const handleImageError = (e) => {
+      console.warn('Image load failed for user:', user?.name, 'URL:', user?.profilePicture);
+      setImageError(true);
+      e.target.style.display = 'none';
     };
 
-    // Show image if URL exists and no error
-    if (profilePic && !hasError) {
+    const handleImageLoad = () => {
+      setImageLoaded(true);
+    };
+
+    // Show avatar if: no picture, error loading, or invalid URL
+    const shouldShowAvatar = !user?.profilePicture || imageError || !user.profilePicture.startsWith('http');
+
+    if (shouldShowAvatar) {
       return (
-        <img 
-          src={profilePic}
-          alt={user?.name || 'User'}
-          className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 ${className}`}
-          onError={handleImageError}
-          loading="lazy"
-        />
+        <div 
+          className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200 flex-shrink-0 ${className}`}
+          title={user?.name || 'User'}
+        >
+          <span className="text-white font-bold">
+            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+          </span>
+        </div>
       );
     }
 
-    // Fallback to avatar with initials
     return (
-      <div className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200 ${className}`}>
-        <span className={`text-white font-bold`}>
-          {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-        </span>
-      </div>
+      <>
+        {!imageLoaded && (
+          <div className={`${sizeClasses[size]} bg-gray-200 rounded-full animate-pulse border-4 border-gray-200 flex-shrink-0 ${className}`} />
+        )}
+        <img 
+          key={imageKey}
+          src={user.profilePicture}
+          alt={user?.name || 'User'}
+          className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
+          onError={handleImageError}
+          onLoad={handleImageLoad}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      </>
     );
-  };  
+  };
 
   // Initial fetch and auto-refresh every 30 seconds
   useEffect(() => {
@@ -255,19 +276,7 @@ const UserDashboard = () => {
       <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 border-2 border-gray-200">
         <div className="flex items-center gap-3 md:gap-4 mb-4 md:mb-6">
           <div className="relative">
-            {currentUser?.profilePicture ? (
-              <img 
-                src={currentUser.profilePicture} 
-                alt={currentUser.name}
-                className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-4 border-gray-200"
-              />
-            ) : (
-              <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200">
-                <span className="text-white text-xl md:text-2xl font-bold">
-                  {currentUser?.name?.charAt(0).toUpperCase()}
-                </span>
-              </div>
-            )}
+            <ProfilePicture user={currentUser} size="md" />
             <div className={`absolute -bottom-1 -right-1 w-5 h-5 md:w-6 md:h-6 rounded-full border-4 border-white ${
               currentUser?.status === 'active' ? 'bg-green-500' : 'bg-red-500'
             }`}></div>
@@ -462,19 +471,7 @@ const UserDashboard = () => {
         <h3 className="text-xl md:text-2xl font-bold text-black mb-4">Your Membership Barcode</h3>
         
         <div className="mb-4 md:mb-6">
-          {currentUser?.profilePicture ? (
-            <img 
-              src={currentUser.profilePicture} 
-              alt={currentUser.name}
-              className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover border-4 border-gray-200 mx-auto"
-            />
-          ) : (
-            <div className="w-20 h-20 md:w-24 md:h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200 mx-auto">
-              <span className="text-white text-2xl md:text-3xl font-bold">
-                {currentUser?.name?.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
+          <ProfilePicture user={currentUser} size="lg" className="mx-auto" />
           <p className="mt-3 font-bold text-lg md:text-xl">{currentUser?.name}</p>
           <p className="text-xs md:text-sm text-gray-600">{currentUser?.membershipType}</p>
         </div>
@@ -621,19 +618,7 @@ const UserDashboard = () => {
         <h3 className="text-lg md:text-xl font-bold text-black mb-4">Profile Information</h3>
         
         <div className="mb-4 md:mb-6 text-center">
-          {currentUser?.profilePicture ? (
-            <img 
-              src={currentUser.profilePicture} 
-              alt={currentUser.name}
-              className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover border-4 border-gray-200 mx-auto"
-            />
-          ) : (
-            <div className="w-24 h-24 md:w-32 md:h-32 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200 mx-auto">
-              <span className="text-white text-3xl md:text-4xl font-bold">
-                {currentUser?.name?.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
+          <ProfilePicture user={currentUser} size="xl" className="mx-auto" />
         </div>
 
         <div className="space-y-4">
