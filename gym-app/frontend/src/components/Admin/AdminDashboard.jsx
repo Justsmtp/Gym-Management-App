@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, CheckCircle, Clock, TrendingUp, RefreshCw, Menu, X, Eye, Mail, Phone, Calendar, CreditCard, Activity } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import API from '../../api/api';
+import api from '../../api/api';
 import AdminSidebar from './AdminSidebar';
 import AdminSettingsPanel from './AdminSettingsPanel';
 import AttendanceManagement from './AttendanceManagement';
@@ -41,11 +41,11 @@ const AdminDashboard = () => {
       setError(null);
 
       const [usersRes, paymentsRes, attendanceRes, attendanceStatsRes, paymentsStatsRes] = await Promise.all([
-        API.get('/users').catch(() => ({ data: [] })),
-        API.get('/payments').catch(() => ({ data: [] })),
-        API.get('/attendance/today').catch(() => ({ data: [] })),
-        API.get('/attendance/stats').catch(() => ({ data: {} })),
-        API.get('/payments/stats').catch(() => ({ data: {} })),
+        api.get('/users').catch(() => ({ data: [] })),
+        api.get('/payments').catch(() => ({ data: [] })),
+        api.get('/attendance/today').catch(() => ({ data: [] })),
+        api.get('/attendance/stats').catch(() => ({ data: {} })),
+        api.get('/payments/stats').catch(() => ({ data: {} })),
       ]);
 
       const fetchedUsers = Array.isArray(usersRes.data) ? usersRes.data : usersRes.data.users || [];
