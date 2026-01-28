@@ -1,7 +1,7 @@
 // frontend/src/components/Admin/AdminSettingsPanel.jsx
 import React, { useState, useEffect } from 'react';
 import { Settings, DollarSign, Bell, Mail, Save, Edit2, Check, X, Loader } from 'lucide-react';
-import axios from 'axios';
+import api from '../../api/api';
 
 const AdminSettingsPanel = () => {
   const [message, setMessage] = useState(null);
@@ -31,15 +31,27 @@ const AdminSettingsPanel = () => {
   const fetchPlans = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/plans');
-      if (response.data.success) {
-        setPlans(response.data.plans);
+      console.log('🚀 Fetching membership plans from /plans...');
+      
+      const data = await api.get('/plans');
+      
+      console.log('📦 Plans Response:', data);
+      
+      if (data.success && data.plans) {
+        setPlans(data.plans);
+        console.log(`✅ Loaded ${data.plans.length} membership plans`);
+      } else {
+        console.warn('⚠️ No plans in response:', data);
+        setMessage({ 
+          type: 'error', 
+          text: 'No plans found. Database may need to be seeded.' 
+        });
       }
     } catch (error) {
-      console.error('Error fetching plans:', error);
+      console.error('❌ Error fetching plans:', error);
       setMessage({ 
         type: 'error', 
-        text: 'Failed to load membership plans. Please refresh the page.' 
+        text: 'Failed to load plans. Check console for details.' 
       });
     } finally {
       setLoading(false);
@@ -53,37 +65,31 @@ const AdminSettingsPanel = () => {
   const handlePlanSave = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      console.log('💾 Saving plan:', editingPlan);
       
-      const response = await axios.put(
-        `/api/plans/${editingPlan._id}`,
-        {
-          displayName: editingPlan.displayName,
-          price: editingPlan.price,
-          duration: editingPlan.duration,
-          description: editingPlan.description,
-        },
-        {
-          headers: {
-            'x-auth-token': token,
-          },
-        }
-      );
+      const data = await api.put(`/plans/${editingPlan._id}`, {
+        displayName: editingPlan.displayName,
+        price: editingPlan.price,
+        duration: editingPlan.duration,
+        description: editingPlan.description,
+      });
 
-      if (response.data.success) {
-        // Update the local state with the updated plan
-        setPlans(plans.map(p => p._id === editingPlan._id ? response.data.plan : p));
+      console.log('✅ Plan saved:', data);
+
+      if (data.success) {
+        setPlans(plans.map(p => p._id === editingPlan._id ? data.plan : p));
         setEditingPlan(null);
-        setMessage({ type: 'success', text: 'Plan updated successfully! Changes are now live for all users.' });
-        
-        // Auto-dismiss success message after 5 seconds
+        setMessage({ 
+          type: 'success', 
+          text: 'Plan updated successfully! Changes are live for all users.' 
+        });
         setTimeout(() => setMessage(null), 5000);
       }
     } catch (error) {
-      console.error('Error updating plan:', error);
+      console.error('❌ Error updating plan:', error);
       setMessage({ 
         type: 'error', 
-        text: error.response?.data?.message || 'Failed to update plan. Please try again.' 
+        text: error.message || 'Failed to update plan' 
       });
     } finally {
       setLoading(false);
