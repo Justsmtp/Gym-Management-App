@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 // frontend/src/components/Admin/AdminDashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { Users, CheckCircle, Clock, TrendingUp, RefreshCw, Menu, X } from 'lucide-react';
+import { Users, CheckCircle, Clock, TrendingUp, RefreshCw, Menu, X, Eye, Mail, Phone, Calendar, CreditCard, Activity } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import API from '../../api/api';
 import AdminSidebar from './AdminSidebar';
@@ -15,6 +15,8 @@ const AdminDashboard = () => {
   const [payments, setPayments] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showUserModal, setShowUserModal] = useState(false);
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -74,6 +76,11 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewUser = (user) => {
+    setSelectedUser(user);
+    setShowUserModal(true);
   };
 
   if (loading && users.length === 0) {
@@ -165,24 +172,187 @@ const AdminDashboard = () => {
         {/* Content */}
         <div className="max-w-7xl mx-auto p-4 md:p-6">
           {activeTab === 'overview' && (
-            <OverviewTab stats={stats} users={users} payments={payments} />
+            <OverviewTab stats={stats} users={users} payments={payments} onViewUser={handleViewUser} />
           )}
           {activeTab === 'users' && (
-            <UsersTab users={users} refreshData={fetchAllData} />
+            <UsersTab users={users} refreshData={fetchAllData} onViewUser={handleViewUser} />
           )}
           {activeTab === 'payments' && (
-            <PaymentsTab payments={payments} />
+            <PaymentsTab payments={payments} onViewUser={handleViewUser} />
           )}
           {activeTab === 'attendance' && <AttendanceManagement />}
           {activeTab === 'settings' && <AdminSettingsPanel />}
         </div>
       </main>
+
+      {/* User Detail Modal */}
+      {showUserModal && selectedUser && (
+        <UserDetailModal 
+          user={selectedUser} 
+          onClose={() => {
+            setShowUserModal(false);
+            setSelectedUser(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// User Detail Modal Component
+const UserDetailModal = ({ user, onClose }) => {
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      return 'N/A';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-6 rounded-t-2xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {user.profilePicture ? (
+                <img
+                  src={user.profilePicture}
+                  alt={user.name}
+                  className="w-20 h-20 rounded-full object-cover border-4 border-white"
+                  onError={(e) => e.target.style.display = 'none'}
+                />
+              ) : (
+                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center">
+                  <span className="text-purple-600 text-3xl font-bold">
+                    {user.name?.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <div>
+                <h2 className="text-2xl font-bold text-white">{user.name}</h2>
+                <p className="text-white opacity-90">{user.membershipType} Member</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition"
+            >
+              <X size={24} />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Status Badge */}
+          <div className="flex justify-center">
+            <span className={`px-6 py-2 rounded-full text-sm font-bold ${
+              user.status === 'active' ? 'bg-green-100 text-green-800' :
+              user.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+              'bg-red-100 text-red-800'
+            }`}>
+              {user.status?.toUpperCase()}
+            </span>
+          </div>
+
+          {/* Contact Information */}
+          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+            <h3 className="font-bold text-lg text-black mb-3">Contact Information</h3>
+            <div className="flex items-center gap-3">
+              <Mail size={20} className="text-gray-600" />
+              <div>
+                <p className="text-xs text-gray-600">Email</p>
+                <p className="font-semibold text-black">{user.email}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Phone size={20} className="text-gray-600" />
+              <div>
+                <p className="text-xs text-gray-600">Phone</p>
+                <p className="font-semibold text-black">{user.phone || 'N/A'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Membership Details */}
+          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+            <h3 className="font-bold text-lg text-black mb-3">Membership Details</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-gray-600">Plan Type</p>
+                <p className="font-semibold text-black">{user.membershipType}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600">Price</p>
+                <p className="font-semibold text-black">₦{user.membershipPrice?.toLocaleString() || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600">Start Date</p>
+                <p className="font-semibold text-black">{formatDate(user.membershipStartDate)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-600">Expiry Date</p>
+                <p className="font-semibold text-black">{formatDate(user.membershipEndDate)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Activity Stats */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="font-bold text-lg text-black mb-3">Activity Stats</h3>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-2xl font-bold text-black">{user.totalVisits || 0}</p>
+                <p className="text-xs text-gray-600">Total Visits</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-black">{user.membershipDuration || 0}</p>
+                <p className="text-xs text-gray-600">Duration (days)</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-black">
+                  {user.lastCheckIn ? formatDate(user.lastCheckIn) : 'Never'}
+                </p>
+                <p className="text-xs text-gray-600">Last Check-in</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Barcode */}
+          <div className="bg-gray-50 rounded-xl p-4 text-center">
+            <h3 className="font-bold text-lg text-black mb-3">Member ID</h3>
+            <p className="font-mono text-2xl font-bold text-black">{user.barcode || 'N/A'}</p>
+          </div>
+
+          {/* Registration Date */}
+          <div className="text-center text-sm text-gray-600">
+            Member since {formatDate(user.createdAt)}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 bg-gray-50 rounded-b-2xl">
+          <button
+            onClick={onClose}
+            className="w-full bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
 
 // Overview Tab Component
-const OverviewTab = ({ stats, users, payments }) => {
+const OverviewTab = ({ stats, users, payments, onViewUser }) => {
   const recentUsers = users.slice(0, 5);
   const recentPayments = payments
     .filter(p => p.status === 'completed')
@@ -232,7 +402,11 @@ const OverviewTab = ({ stats, users, payments }) => {
           ) : (
             <div className="space-y-2 md:space-y-3">
               {recentUsers.map((user) => (
-                <div key={user._id} className="flex items-center gap-3 p-2 md:p-3 bg-gray-50 rounded-lg">
+                <div 
+                  key={user._id} 
+                  className="flex items-center gap-3 p-2 md:p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                  onClick={() => onViewUser(user)}
+                >
                   {user.profilePicture ? (
                     <img
                       src={user.profilePicture}
@@ -271,7 +445,11 @@ const OverviewTab = ({ stats, users, payments }) => {
           ) : (
             <div className="space-y-2 md:space-y-3">
               {recentPayments.map((payment) => (
-                <div key={payment._id} className="flex items-center gap-3 p-2 md:p-3 bg-gray-50 rounded-lg">
+                <div 
+                  key={payment._id} 
+                  className="flex items-center gap-3 p-2 md:p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                  onClick={() => payment.user && onViewUser(payment.user)}
+                >
                   {payment.user?.profilePicture ? (
                     <img
                       src={payment.user.profilePicture}
@@ -313,7 +491,7 @@ const OverviewTab = ({ stats, users, payments }) => {
 };
 
 // Users Tab
-const UsersTab = ({ users, refreshData }) => {
+const UsersTab = ({ users, refreshData, onViewUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
@@ -362,6 +540,7 @@ const UsersTab = ({ users, refreshData }) => {
                   <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Email</th>
                   <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Membership</th>
                   <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Status</th>
+                  <th className="text-left py-2 md:py-3 px-2 md:px-4 text-xs md:text-sm font-bold">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -397,6 +576,15 @@ const UsersTab = ({ users, refreshData }) => {
                         {user.status}
                       </span>
                     </td>
+                    <td className="py-2 md:py-3 px-2 md:px-4">
+                      <button
+                        onClick={() => onViewUser(user)}
+                        className="text-blue-600 hover:text-blue-800 font-semibold text-xs md:text-sm flex items-center gap-1"
+                      >
+                        <Eye size={16} />
+                        View
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -409,7 +597,7 @@ const UsersTab = ({ users, refreshData }) => {
 };
 
 // Payments Tab
-const PaymentsTab = ({ payments }) => {
+const PaymentsTab = ({ payments, onViewUser }) => {
   const [filterMethod, setFilterMethod] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
