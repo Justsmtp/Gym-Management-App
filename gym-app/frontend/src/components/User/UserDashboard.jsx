@@ -17,6 +17,51 @@ const UserDashboard = () => {
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+  // Profile Picture Component with persistent error handling
+  const ProfilePicture = ({ user, size = 'md', className = '' }) => {
+    const [hasError, setHasError] = useState(false);
+    const profilePic = user?.profilePicture;
+
+    // Reset error state when profile picture URL changes
+    useEffect(() => {
+      setHasError(false);
+    }, [profilePic]);
+
+    const sizeClasses = {
+      sm: 'w-10 h-10 text-sm',
+      md: 'w-16 h-16 md:w-20 md:h-20 text-xl md:text-2xl',
+      lg: 'w-20 h-20 md:w-24 md:h-24 text-2xl md:text-3xl',
+      xl: 'w-24 h-24 md:w-32 md:h-32 text-3xl md:text-4xl'
+    };
+
+    const handleImageError = () => {
+      console.error('Failed to load profile picture:', profilePic);
+      setHasError(true);
+    };
+
+    // Show image if URL exists and no error
+    if (profilePic && !hasError) {
+      return (
+        <img 
+          src={profilePic}
+          alt={user?.name || 'User'}
+          className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 ${className}`}
+          onError={handleImageError}
+          loading="lazy"
+        />
+      );
+    }
+
+    // Fallback to avatar with initials
+    return (
+      <div className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200 ${className}`}>
+        <span className={`text-white font-bold`}>
+          {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+        </span>
+      </div>
+    );
+  };  
+
   // Initial fetch and auto-refresh every 30 seconds
   useEffect(() => {
     const fetchAttendanceStatus = async () => {
