@@ -8,6 +8,51 @@ import AdminSidebar from './AdminSidebar';
 import AdminSettingsPanel from './AdminSettingsPanel';
 import AttendanceManagement from './AttendanceManagement';
 
+// Reusable Profile Picture Component with Error Handling
+const ProfilePicture = ({ user, size = 'md', className = '' }) => {
+  const [hasError, setHasError] = useState(false);
+  const profilePic = user?.profilePicture;
+
+  // Reset error state when profile picture URL changes
+  useEffect(() => {
+    setHasError(false);
+  }, [profilePic]);
+
+  const sizeClasses = {
+    sm: 'w-8 h-8 text-xs',
+    md: 'w-10 h-10 text-sm',
+    lg: 'w-16 h-16 text-xl',
+    xl: 'w-20 h-20 text-2xl'
+  };
+
+  const handleImageError = () => {
+    console.error('Failed to load profile picture:', profilePic);
+    setHasError(true);
+  };
+
+  // Show image if URL exists and no error
+  if (profilePic && !hasError) {
+    return (
+      <img 
+        src={profilePic}
+        alt={user?.name || 'User'}
+        className={`${sizeClasses[size]} rounded-full object-cover border-2 border-gray-200 ${className}`}
+        onError={handleImageError}
+        loading="lazy"
+      />
+    );
+  }
+
+  // Fallback to avatar with initials
+  return (
+    <div className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-2 border-gray-200 ${className}`}>
+      <span className="text-white font-bold">
+        {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+      </span>
+    </div>
+  );
+};
+
 const AdminDashboard = () => {
   useApp();
   const [activeTab, setActiveTab] = useState('overview');
@@ -218,7 +263,7 @@ const UserDetailModal = ({ user, onClose }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-6 rounded-t-2xl">
+        <div className="bg-gradient-to-r from-white-500 to-black-600 p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               {user.profilePicture ? (
