@@ -14,13 +14,13 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   
   // Key that changes when user or profilePicture changes
-  const imageKey = `${user?._id}-${user?.profilePicture}`;
+  const imageKey = `${user?._id}-${user?.profilePicture}-${Date.now()}`;
   
   // Reset state when user or profile picture changes
   useEffect(() => {
     setImageError(false);
     setImageLoaded(false);
-  }, [imageKey]);
+  }, [user?._id, user?.profilePicture]);
 
   const sizeClasses = {
     sm: 'w-10 h-10 text-sm',
@@ -62,7 +62,7 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
       )}
       <img 
         key={imageKey}
-        src={user.profilePicture}
+        src={`${user.profilePicture}?t=${Date.now()}`}
         alt={user?.name || 'User'}
         className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
         onError={handleImageError}
@@ -318,7 +318,7 @@ const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
   );
 };
 
-// Profile Picture Modal
+// Profile Picture Modal - FIXED VERSION
 const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMessage }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -363,18 +363,34 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
+      console.log('✅ Upload response:', response.data);
+
       if (response.data.success) {
-        const updatedUser = {
-          ...currentUser,
-          profilePicture: response.data.profilePicture
-        };
-        setCurrentUser(updatedUser);
-        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        // CRITICAL FIX: Refresh user data from server to get the new picture URL
+        const userResponse = await API.get('/auth/me');
+        const freshUserData = userResponse.data;
+        
+        console.log('✅ Fresh user data:', freshUserData);
+        
+        // Update both state and localStorage with fresh data
+        setCurrentUser(freshUserData);
+        localStorage.setItem('currentUser', JSON.stringify(freshUserData));
+        
+        // Force a re-render by clearing preview
+        setPreviewUrl(null);
+        setSelectedFile(null);
 
         setMessage({ type: 'success', text: 'Profile picture updated successfully!' });
-        setTimeout(() => closeModal(), 2000);
+        
+        // Close modal after short delay to show success
+        setTimeout(() => {
+          closeModal();
+          // Force page refresh to ensure image displays everywhere
+          window.location.reload();
+        }, 1500);
       }
     } catch (err) {
+      console.error('❌ Upload error:', err);
       setUploadError(err.response?.data?.message || 'Failed to upload image');
     } finally {
       setUploading(false);
@@ -389,12 +405,18 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
       const response = await API.delete('/users/delete-profile-picture');
       
       if (response.data.success) {
-        const updatedUser = { ...currentUser, profilePicture: null };
-        setCurrentUser(updatedUser);
-        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        // Refresh user data from server
+        const userResponse = await API.get('/auth/me');
+        const freshUserData = userResponse.data;
+        
+        setCurrentUser(freshUserData);
+        localStorage.setItem('currentUser', JSON.stringify(freshUserData));
         
         setMessage({ type: 'success', text: 'Profile picture removed successfully!' });
-        setTimeout(() => closeModal(), 2000);
+        setTimeout(() => {
+          closeModal();
+          window.location.reload();
+        }, 1500);
       }
     } catch (err) {
       setUploadError(err.response?.data?.message || 'Failed to delete picture');
@@ -517,7 +539,6 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
     </ModalWrapper>
   );
 };
-
 // Password Change Modal
 const PasswordModal = ({ closeModal, message, setMessage, loading, setLoading }) => {
   const [showPassword, setShowPassword] = useState(false);
@@ -1000,4 +1021,4 @@ const ModalWrapper = ({ title, onClose, icon: Icon, children }) => {
   );
 };
 
-export default UserSettingsPanel;
+export default UserSettingsPanel; 
