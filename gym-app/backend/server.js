@@ -272,6 +272,8 @@ const attendanceRoutes = require('./routes/attendance');
 const usersRoutes = require('./routes/users');
 const remindersRoutes = require('./routes/reminders');
 const plansRoutes = require('./routes/plans');
+const bugReportsRoutes = require('./routes/bugReports');
+
 
 // NO RATE LIMITING ON LOGIN - Completely disabled
 // If you want to re-enable rate limiting in the future, uncomment the code below:
@@ -320,6 +322,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/reminders', remindersRoutes);
 app.use('/api/plans', plansRoutes);
+app.use('/api/bug-reports', bugReportsRoutes);
 
 // ============================================
 // HEALTH CHECK & ROOT ENDPOINTS
