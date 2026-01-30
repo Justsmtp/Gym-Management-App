@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 // frontend/src/components/User/UserSettingsPanel.jsx
 import React, { useState, useEffect } from 'react';
 import { 
@@ -8,6 +7,72 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import API from '../../api/api';
+
+// Profile Picture Component with Persistent Error Handling
+const ProfilePicture = ({ user, size = 'md', className = '' }) => {
+  const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  
+  // Key that changes when user or profilePicture changes
+  const imageKey = `${user?._id}-${user?.profilePicture}`;
+  
+  // Reset state when user or profile picture changes
+  useEffect(() => {
+    setImageError(false);
+    setImageLoaded(false);
+  }, [imageKey]);
+
+  const sizeClasses = {
+    sm: 'w-10 h-10 text-sm',
+    md: 'w-16 h-16 md:w-20 md:h-20 text-xl md:text-2xl',
+    lg: 'w-32 h-32 md:w-40 md:h-40 text-3xl md:text-4xl',
+    xl: 'w-40 h-40 text-4xl md:text-5xl'
+  };
+
+  const handleImageError = (e) => {
+    console.warn('Image load failed for user:', user?.name, 'URL:', user?.profilePicture);
+    setImageError(true);
+    e.target.style.display = 'none';
+  };
+
+  const handleImageLoad = () => {
+    setImageLoaded(true);
+  };
+
+  // Show avatar if: no picture, error loading, or invalid URL
+  const shouldShowAvatar = !user?.profilePicture || imageError || !user.profilePicture.startsWith('http');
+
+  if (shouldShowAvatar) {
+    return (
+      <div 
+        className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200 flex-shrink-0 ${className}`}
+        title={user?.name || 'User'}
+      >
+        <span className="text-white font-bold">
+          {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {!imageLoaded && (
+        <div className={`${sizeClasses[size]} bg-gray-200 rounded-full animate-pulse border-4 border-gray-200 flex-shrink-0 ${className}`} />
+      )}
+      <img 
+        key={imageKey}
+        src={user.profilePicture}
+        alt={user?.name || 'User'}
+        className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
+        onError={handleImageError}
+        onLoad={handleImageLoad}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+      />
+    </>
+  );
+};
 
 const UserSettingsPanel = () => {
   const { currentUser, setCurrentUser, handleSignOut } = useApp();
@@ -352,18 +417,14 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
 
       <div className="text-center space-y-4">
         <div className="relative inline-block">
-          {previewUrl || currentUser?.profilePicture ? (
+          {previewUrl ? (
             <img
-              src={previewUrl || currentUser.profilePicture}
-              alt="Profile"
+              src={previewUrl}
+              alt="Preview"
               className="w-40 h-40 rounded-full object-cover border-4 border-gray-200"
             />
           ) : (
-            <div className="w-40 h-40 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200">
-              <span className="text-white text-5xl font-bold">
-                {currentUser?.name?.charAt(0).toUpperCase()}
-              </span>
-            </div>
+            <ProfilePicture user={currentUser} size="lg" />
           )}
 
           <label
