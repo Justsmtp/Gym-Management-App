@@ -640,12 +640,6 @@ const UserDashboard = () => {
               {formatDate(currentUser?.createdAt)}
             </p>
           </div>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className="w-full mt-4 bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition text-sm md:text-base"
-          >
-            Edit Profile
-          </button>
         </div>
       </div>
     </div>
