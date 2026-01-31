@@ -1,5 +1,5 @@
 // frontend/src/components/User/UserSettingsPanel.jsx
-// FINAL VERSION - WITH PAGE RELOAD TO ENSURE PICTURES SHOW EVERYWHERE
+// PERFECT FIX - No premature reload, proper image loading
 import React, { useState, useEffect } from 'react';
 import { 
   User, Bell, Lock, CreditCard, Mail, Phone, Save, Eye, EyeOff, 
@@ -9,20 +9,19 @@ import {
 import { useApp } from '../../context/AppContext';
 import API from '../../api/api';
 
-// ProfilePicture Component with Cache Busting
+// FIXED ProfilePicture Component
 const ProfilePicture = ({ user, size = 'md', className = '' }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageUrl, setImageUrl] = useState('');
+
+  // Create unique URL with timestamp for cache busting
+  const imageUrl = user?.profilePicture 
+    ? `${user.profilePicture}?v=${Date.now()}` 
+    : null;
 
   useEffect(() => {
-    if (user?.profilePicture && user.profilePicture.startsWith('http')) {
-      setImageUrl(`${user.profilePicture}?t=${Date.now()}`);
-      setImageError(false);
-      setImageLoaded(false);
-    } else {
-      setImageUrl('');
-    }
+    setImageError(false);
+    setImageLoaded(false);
   }, [user?._id, user?.profilePicture]);
 
   const sizeClasses = {
@@ -32,15 +31,17 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
     xl: 'w-40 h-40 text-4xl md:text-5xl'
   };
 
-  const handleImageError = (e) => {
+  const handleImageError = () => {
+    console.log('❌ Image failed to load:', user?.profilePicture);
     setImageError(true);
-    if (e.target) e.target.style.display = 'none';
   };
 
   const handleImageLoad = () => {
+    console.log('✅ Image loaded:', user?.profilePicture);
     setImageLoaded(true);
   };
 
+  // Show gradient avatar if no image or error
   const shouldShowAvatar = !imageUrl || imageError;
 
   if (shouldShowAvatar) {
@@ -57,21 +58,19 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
   }
 
   return (
-    <>
+    <div className="relative">
       {!imageLoaded && (
-        <div className={`${sizeClasses[size]} bg-gray-200 rounded-full animate-pulse border-4 border-gray-200 flex-shrink-0 ${className}`} />
+        <div className={`${sizeClasses[size]} bg-gray-300 rounded-full animate-pulse border-4 border-gray-200 flex-shrink-0 ${className}`} />
       )}
       <img 
-        key={imageUrl}
         src={imageUrl}
         alt={user?.name || 'User'}
-        className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
+        className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? 'block' : 'hidden'}`}
         onError={handleImageError}
         onLoad={handleImageLoad}
-        loading="eager"
         crossOrigin="anonymous"
       />
-    </>
+    </div>
   );
 };
 
@@ -87,48 +86,12 @@ const UserSettingsPanel = () => {
   };
 
   const settingsMenu = [
-    {
-      id: 'profile',
-      icon: User,
-      title: 'Profile Information',
-      description: 'Update your name, email, and phone number',
-      color: 'blue'
-    },
-    {
-      id: 'picture',
-      icon: Camera,
-      title: 'Profile Picture',
-      description: 'Upload or change your profile photo',
-      color: 'purple'
-    },
-    {
-      id: 'password',
-      icon: Lock,
-      title: 'Change Password',
-      description: 'Update your account password',
-      color: 'green'
-    },
-    {
-      id: 'notifications',
-      icon: Bell,
-      title: 'Notifications',
-      description: 'Manage your notification preferences',
-      color: 'orange'
-    },
-    {
-      id: 'membership',
-      icon: CreditCard,
-      title: 'Membership Info',
-      description: 'View your membership details',
-      color: 'indigo'
-    },
-    {
-      id: 'support',
-      icon: Headphones,
-      title: 'Customer Service',
-      description: 'Get help and contact support',
-      color: 'pink'
-    }
+    { id: 'profile', icon: User, title: 'Profile Information', description: 'Update your name, email, and phone number', color: 'blue' },
+    { id: 'picture', icon: Camera, title: 'Profile Picture', description: 'Upload or change your profile photo', color: 'purple' },
+    { id: 'password', icon: Lock, title: 'Change Password', description: 'Update your account password', color: 'green' },
+    { id: 'notifications', icon: Bell, title: 'Notifications', description: 'Manage your notification preferences', color: 'orange' },
+    { id: 'membership', icon: CreditCard, title: 'Membership Info', description: 'View your membership details', color: 'indigo' },
+    { id: 'support', icon: Headphones, title: 'Customer Service', description: 'Get help and contact support', color: 'pink' }
   ];
 
   const colorClasses = {
@@ -144,9 +107,7 @@ const UserSettingsPanel = () => {
     <div className="max-w-4xl mx-auto">
       {message && !activeModal && (
         <div className={`mb-4 p-3 md:p-4 rounded-xl border-2 ${
-          message.type === 'success' 
-            ? 'bg-green-50 border-green-200' 
-            : 'bg-red-50 border-red-200'
+          message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
         }`}>
           <div className="flex justify-between items-center">
             <p className={`text-sm md:text-base font-semibold ${
@@ -184,13 +145,8 @@ const UserSettingsPanel = () => {
 
       <div className="mt-6 bg-red-50 rounded-2xl shadow-lg p-6 border-2 border-red-200">
         <h3 className="text-lg font-bold text-red-900 mb-2">Sign Out</h3>
-        <p className="text-sm text-red-700 mb-4">
-          Once you sign out, you'll need to log in again to access your account.
-        </p>
-        <button
-          onClick={handleSignOut}
-          className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition"
-        >
+        <p className="text-sm text-red-700 mb-4">Once you sign out, you'll need to log in again to access your account.</p>
+        <button onClick={handleSignOut} className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition">
           Sign Out of Account
         </button>
       </div>
@@ -219,18 +175,13 @@ const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
 
     try {
       const response = await API.put('/auth/update-profile', profileData);
-      
       const updatedUser = { ...currentUser, ...response.data.user };
       setCurrentUser(updatedUser);
       localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
       setTimeout(() => closeModal(), 2000);
     } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: error.response?.data?.message || 'Failed to update profile' 
-      });
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to update profile' });
     } finally {
       setLoading(false);
     }
@@ -239,80 +190,38 @@ const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
   return (
     <ModalWrapper title="Profile Information" onClose={closeModal} icon={User}>
       {message && (
-        <div className={`mb-4 p-3 rounded-lg border-2 ${
-          message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-        }`}>
+        <div className={`mb-4 p-3 rounded-lg border-2 ${message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
           <p className={`text-sm font-semibold ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
             {message.type === 'success' ? '✅' : '❌'} {message.text}
           </p>
         </div>
       )}
-
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-          <input
-            type="text"
-            value={profileData.name}
-            onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-            required
-          />
+          <input type="text" value={profileData.name} onChange={(e) => setProfileData({ ...profileData, name: e.target.value })} className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" required />
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            <Mail className="inline mr-2" size={16} />
-            Email Address
-          </label>
-          <input
-            type="email"
-            value={profileData.email}
-            onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-            required
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-2"><Mail className="inline mr-2" size={16} />Email Address</label>
+          <input type="email" value={profileData.email} onChange={(e) => setProfileData({ ...profileData, email: e.target.value })} className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" required />
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            <Phone className="inline mr-2" size={16} />
-            Phone Number
-          </label>
-          <input
-            type="tel"
-            value={profileData.phone}
-            onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-            pattern="[0-9]{11}"
-            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-            required
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-2"><Phone className="inline mr-2" size={16} />Phone Number</label>
+          <input type="tel" value={profileData.phone} onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })} pattern="[0-9]{11}" className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none" required />
           <p className="text-xs text-gray-500 mt-1">Must be 11 digits</p>
         </div>
-
         <div className="flex gap-3 pt-4">
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50"
-          >
-            <Save className="inline mr-2" size={16} />
-            {loading ? 'Saving...' : 'Save Changes'}
+          <button type="submit" disabled={loading} className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50">
+            <Save className="inline mr-2" size={16} />{loading ? 'Saving...' : 'Save Changes'}
           </button>
-          <button
-            type="button"
-            onClick={closeModal}
-            className="px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
-          >
-            Cancel
-          </button>
+          <button type="button" onClick={closeModal} className="px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition">Cancel</button>
         </div>
       </form>
     </ModalWrapper>
   );
 };
 
-// FIXED: Picture Modal with Page Reload
+// COMPLETELY FIXED Picture Modal
 const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMessage }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -344,7 +253,10 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile) {
+      setUploadError('Please select a file first');
+      return;
+    }
 
     setUploading(true);
     setUploadError(null);
@@ -353,35 +265,44 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
       const formData = new FormData();
       formData.append('profilePicture', selectedFile);
 
-      console.log('📤 Uploading profile picture...');
+      console.log('📤 Starting upload...');
       
       const response = await API.post('/users/upload-profile-picture', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      console.log('✅ Upload response:', response.data);
+      console.log('📥 Upload response:', response.data);
 
-      if (response.data.success) {
-        // Fetch fresh user data
+      if (response.data.success && response.data.profilePicture) {
+        // CRITICAL: Fetch completely fresh user data
+        console.log('🔄 Fetching fresh user data...');
         const userResponse = await API.get('/auth/me');
         const freshUser = userResponse.data;
         
-        console.log('✅ Fresh user data:', freshUser);
+        console.log('✅ Fresh user profilePicture:', freshUser.profilePicture);
         
-        // Update state and localStorage
+        // Update everywhere
         setCurrentUser(freshUser);
         localStorage.setItem('currentUser', JSON.stringify(freshUser));
 
-        setMessage({ type: 'success', text: 'Profile picture updated! Refreshing page...' });
+        // Clear the form
+        setSelectedFile(null);
+        setPreviewUrl(null);
+
+        setMessage({ type: 'success', text: 'Profile picture uploaded successfully!' });
         
-        // CRITICAL: Reload page to show picture everywhere
+        // Wait a moment, then reload to show everywhere
         setTimeout(() => {
+          console.log('🔄 Reloading page to refresh all components...');
           window.location.reload();
-        }, 1500);
+        }, 2000);
+      } else {
+        throw new Error('Upload succeeded but no picture URL returned');
       }
     } catch (err) {
-      console.error('❌ Upload error:', err);
-      setUploadError(err.response?.data?.message || 'Failed to upload image');
+      console.error('❌ Upload failed:', err);
+      console.error('Error details:', err.response?.data);
+      setUploadError(err.response?.data?.message || 'Failed to upload image. Please try again.');
       setUploading(false);
     }
   };
@@ -400,7 +321,7 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
         setCurrentUser(freshUser);
         localStorage.setItem('currentUser', JSON.stringify(freshUser));
         
-        setMessage({ type: 'success', text: 'Profile picture removed! Refreshing...' });
+        setMessage({ type: 'success', text: 'Profile picture removed!' });
         setTimeout(() => {
           window.location.reload();
         }, 1500);
@@ -414,9 +335,7 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
   return (
     <ModalWrapper title="Profile Picture" onClose={closeModal} icon={Camera}>
       {message && (
-        <div className={`mb-4 p-3 rounded-lg border-2 ${
-          message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-        }`}>
+        <div className={`mb-4 p-3 rounded-lg border-2 ${message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
           <p className={`text-sm font-semibold ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
             {message.type === 'success' ? '✅' : '❌'} {message.text}
           </p>
@@ -426,58 +345,48 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
       <div className="text-center space-y-4">
         <div className="relative inline-block">
           {previewUrl ? (
-            <img
-              src={previewUrl}
-              alt="Preview"
-              className="w-40 h-40 rounded-full object-cover border-4 border-gray-200"
-            />
+            <img src={previewUrl} alt="Preview" className="w-40 h-40 rounded-full object-cover border-4 border-gray-200 shadow-lg" />
           ) : (
             <ProfilePicture user={currentUser} size="lg" />
           )}
 
-          <label
-            htmlFor="picture-upload"
-            className="absolute bottom-0 right-0 w-12 h-12 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-purple-700 transition shadow-lg"
-          >
+          <label htmlFor="picture-upload" className="absolute bottom-0 right-0 w-12 h-12 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-purple-700 transition shadow-lg">
             <Camera size={20} />
           </label>
           
-          <input
-            id="picture-upload"
-            type="file"
-            accept="image/*"
-            onChange={handleFileSelect}
-            className="hidden"
-            disabled={uploading}
-          />
+          <input id="picture-upload" type="file" accept="image/*" onChange={handleFileSelect} className="hidden" disabled={uploading} />
         </div>
 
-        <p className="text-sm text-gray-600">Click the camera icon to select a photo</p>
-        <p className="text-xs text-gray-500">JPG, PNG or GIF. Max size 5MB</p>
+        <p className="text-sm text-gray-600 font-medium">Click the camera icon to select a photo</p>
+        <p className="text-xs text-gray-500">JPG, PNG or GIF • Max 5MB</p>
 
         {uploadError && (
           <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3 flex items-center gap-2">
-            <X size={18} className="text-red-600" />
+            <AlertCircle size={18} className="text-red-600" />
             <p className="text-sm text-red-700">{uploadError}</p>
           </div>
         )}
 
         {selectedFile && (
           <>
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3 text-left">
-              <p className="text-sm text-blue-800 font-semibold">📎 {selectedFile.name}</p>
-              <p className="text-xs text-blue-600">Size: {(selectedFile.size / 1024).toFixed(2)} KB</p>
+            <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4 text-left">
+              <div className="flex items-center gap-2 mb-2">
+                <Check size={18} className="text-purple-600" />
+                <p className="text-sm text-purple-800 font-semibold">File Selected</p>
+              </div>
+              <p className="text-sm text-purple-700">{selectedFile.name}</p>
+              <p className="text-xs text-purple-600 mt-1">Size: {(selectedFile.size / 1024).toFixed(2)} KB</p>
             </div>
 
             <div className="flex gap-3">
               <button
                 onClick={handleUpload}
                 disabled={uploading}
-                className="flex-1 bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
               >
                 {uploading ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
                     Uploading...
                   </>
                 ) : (
@@ -504,20 +413,13 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
         )}
 
         {currentUser?.profilePicture && !selectedFile && (
-          <button
-            onClick={handleDelete}
-            disabled={uploading}
-            className="w-full px-4 py-3 border-2 border-red-500 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition disabled:opacity-50"
-          >
+          <button onClick={handleDelete} disabled={uploading} className="w-full px-4 py-3 border-2 border-red-500 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition disabled:opacity-50">
             {uploading ? 'Removing...' : 'Remove Profile Picture'}
           </button>
         )}
 
         {!selectedFile && (
-          <button
-            onClick={closeModal}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
-          >
+          <button onClick={closeModal} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition">
             Close
           </button>
         )}
@@ -528,11 +430,7 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
 
 const PasswordModal = ({ closeModal, message, setMessage, loading, setLoading }) => {
   const [showPassword, setShowPassword] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
+  const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -555,14 +453,10 @@ const PasswordModal = ({ closeModal, message, setMessage, loading, setLoading })
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword,
       });
-
       setMessage({ type: 'success', text: 'Password changed successfully!' });
       setTimeout(() => closeModal(), 2000);
     } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: error.response?.data?.message || 'Failed to change password' 
-      });
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to change password' });
     } finally {
       setLoading(false);
     }
@@ -571,75 +465,36 @@ const PasswordModal = ({ closeModal, message, setMessage, loading, setLoading })
   return (
     <ModalWrapper title="Change Password" onClose={closeModal} icon={Lock}>
       {message && (
-        <div className={`mb-4 p-3 rounded-lg border-2 ${
-          message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-        }`}>
+        <div className={`mb-4 p-3 rounded-lg border-2 ${message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
           <p className={`text-sm font-semibold ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
             {message.type === 'success' ? '✅' : '❌'} {message.text}
           </p>
         </div>
       )}
-
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
           <div className="relative">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={passwordData.currentPassword}
-              onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none pr-12"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600"
-            >
+            <input type={showPassword ? 'text' : 'password'} value={passwordData.currentPassword} onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })} className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none pr-12" required />
+            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600">
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
         </div>
-
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-          <input
-            type={showPassword ? 'text' : 'password'}
-            value={passwordData.newPassword}
-            onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none"
-            minLength={6}
-            required
-          />
+          <input type={showPassword ? 'text' : 'password'} value={passwordData.newPassword} onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })} className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none" minLength={6} required />
           <p className="text-xs text-gray-500 mt-1">At least 6 characters</p>
         </div>
-
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-          <input
-            type={showPassword ? 'text' : 'password'}
-            value={passwordData.confirmPassword}
-            onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none"
-            required
-          />
+          <input type={showPassword ? 'text' : 'password'} value={passwordData.confirmPassword} onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })} className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none" required />
         </div>
-
         <div className="flex gap-3 pt-4">
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50"
-          >
+          <button type="submit" disabled={loading} className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50">
             {loading ? 'Changing...' : 'Change Password'}
           </button>
-          <button
-            type="button"
-            onClick={closeModal}
-            className="px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
-          >
-            Cancel
-          </button>
+          <button type="button" onClick={closeModal} className="px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition">Cancel</button>
         </div>
       </form>
     </ModalWrapper>
@@ -647,12 +502,7 @@ const PasswordModal = ({ closeModal, message, setMessage, loading, setLoading })
 };
 
 const NotificationsModal = ({ closeModal, message, setMessage }) => {
-  const [notifications, setNotifications] = useState({
-    emailReminders: true,
-    paymentDue: true,
-    checkInConfirmation: false,
-    promotions: false,
-  });
+  const [notifications, setNotifications] = useState({ emailReminders: true, paymentDue: true, checkInConfirmation: false, promotions: false });
 
   const handleToggle = (key) => {
     setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
@@ -673,54 +523,31 @@ const NotificationsModal = ({ closeModal, message, setMessage }) => {
   return (
     <ModalWrapper title="Notification Preferences" onClose={closeModal} icon={Bell}>
       {message && (
-        <div className={`mb-4 p-3 rounded-lg border-2 ${
-          message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-        }`}>
+        <div className={`mb-4 p-3 rounded-lg border-2 ${message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
           <p className={`text-sm font-semibold ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
             {message.type === 'success' ? '✅' : '❌'} {message.text}
           </p>
         </div>
       )}
-
       <div className="space-y-4">
         {notificationItems.map((item, index) => (
-          <div
-            key={item.key}
-            className={`flex justify-between items-center py-3 ${
-              index !== notificationItems.length - 1 ? 'border-b border-gray-200' : ''
-            }`}
-          >
+          <div key={item.key} className={`flex justify-between items-center py-3 ${index !== notificationItems.length - 1 ? 'border-b border-gray-200' : ''}`}>
             <div className="flex-1">
               <p className="font-semibold text-black">{item.title}</p>
               <p className="text-sm text-gray-600">{item.desc}</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                className="sr-only peer"
-                checked={notifications[item.key]}
-                onChange={() => handleToggle(item.key)}
-              />
+              <input type="checkbox" className="sr-only peer" checked={notifications[item.key]} onChange={() => handleToggle(item.key)} />
               <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
             </label>
           </div>
         ))}
       </div>
-
       <div className="flex gap-3 pt-6">
-        <button
-          onClick={handleSave}
-          className="flex-1 bg-orange-600 text-white py-3 rounded-lg font-semibold hover:bg-orange-700 transition"
-        >
-          <Save className="inline mr-2" size={16} />
-          Save Preferences
+        <button onClick={handleSave} className="flex-1 bg-orange-600 text-white py-3 rounded-lg font-semibold hover:bg-orange-700 transition">
+          <Save className="inline mr-2" size={16} />Save Preferences
         </button>
-        <button
-          onClick={closeModal}
-          className="px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
-        >
-          Cancel
-        </button>
+        <button onClick={closeModal} className="px-6 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition">Cancel</button>
       </div>
     </ModalWrapper>
   );
@@ -729,17 +556,8 @@ const NotificationsModal = ({ closeModal, message, setMessage }) => {
 const MembershipModal = ({ closeModal, currentUser }) => {
   const membershipInfo = [
     { label: 'Membership Type', value: currentUser?.membershipType || 'N/A' },
-    { 
-      label: 'Status', 
-      value: currentUser?.status?.toUpperCase() || 'N/A',
-      color: currentUser?.status === 'active' ? 'text-green-600' : 'text-red-600'
-    },
-    { 
-      label: 'Next Due Date', 
-      value: currentUser?.nextDueDate 
-        ? new Date(currentUser.nextDueDate).toLocaleDateString()
-        : 'N/A'
-    },
+    { label: 'Status', value: currentUser?.status?.toUpperCase() || 'N/A', color: currentUser?.status === 'active' ? 'text-green-600' : 'text-red-600' },
+    { label: 'Next Due Date', value: currentUser?.nextDueDate ? new Date(currentUser.nextDueDate).toLocaleDateString() : 'N/A' },
     { label: 'Total Visits', value: currentUser?.totalVisits || 0 },
   ];
 
@@ -749,30 +567,17 @@ const MembershipModal = ({ closeModal, currentUser }) => {
         {membershipInfo.map((item, index) => (
           <div key={index} className="flex justify-between p-3 bg-gray-50 rounded-lg">
             <span className="text-sm text-gray-600">{item.label}:</span>
-            <span className={`font-semibold text-sm ${item.color || 'text-black'}`}>
-              {item.value}
-            </span>
+            <span className={`font-semibold text-sm ${item.color || 'text-black'}`}>{item.value}</span>
           </div>
         ))}
       </div>
-
-      <button
-        onClick={closeModal}
-        className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
-      >
-        Close
-      </button>
+      <button onClick={closeModal} className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition">Close</button>
     </ModalWrapper>
   );
 };
 
-// FIXED: Support Modal - Actually Sends to Backend
 const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
-  const [bugReport, setBugReport] = useState({
-    subject: '',
-    description: '',
-    email: currentUser?.email || ''
-  });
+  const [bugReport, setBugReport] = useState({ subject: '', description: '', email: currentUser?.email || '' });
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState('');
 
@@ -793,27 +598,18 @@ const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
     setSending(true);
 
     try {
-      console.log('📤 Sending bug report to /api/bug-reports');
-      console.log('Data:', bugReport);
-      
+      console.log('📤 Submitting bug report to /api/bug-reports');
       const response = await API.post('/bug-reports', bugReport);
-      
       console.log('✅ Bug report response:', response.data);
       
       if (response.data.success || response.data.reportId) {
-        setMessage({ type: 'success', text: 'Bug report sent successfully! Admin will review it soon.' });
+        setMessage({ type: 'success', text: 'Bug report sent successfully! We\'ll review it soon.' });
         setBugReport({ subject: '', description: '', email: currentUser?.email || '' });
         setTimeout(() => closeModal(), 2000);
-      } else {
-        throw new Error('Unexpected response format');
       }
     } catch (error) {
       console.error('❌ Bug report error:', error);
-      console.error('Error response:', error.response?.data);
-      setMessage({ 
-        type: 'error', 
-        text: error.response?.data?.message || 'Failed to send report. Please try again.' 
-      });
+      setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to send report. Please try again.' });
     } finally {
       setSending(false);
     }
@@ -822,20 +618,16 @@ const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
   return (
     <ModalWrapper title="Customer Service" onClose={closeModal} icon={Headphones}>
       {message && (
-        <div className={`mb-4 p-3 rounded-lg border-2 ${
-          message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-        }`}>
+        <div className={`mb-4 p-3 rounded-lg border-2 ${message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
           <p className={`text-sm font-semibold ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
             {message.type === 'success' ? '✅' : '❌'} {message.text}
           </p>
         </div>
       )}
-
       <div className="space-y-6">
         <div>
           <h4 className="font-semibold text-black mb-3 flex items-center gap-2">
-            <Headphones size={18} />
-            Contact Information
+            <Headphones size={18} />Contact Information
           </h4>
           <div className="space-y-2">
             {contactInfo.map((item, index) => (
@@ -848,79 +640,38 @@ const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
                   </div>
                 </div>
                 {item.copyable && (
-                  <button
-                    onClick={() => handleCopy(item.value, item.label)}
-                    className="p-2 hover:bg-gray-200 rounded-lg transition"
-                  >
-                    {copied === item.label ? (
-                      <Check size={18} className="text-green-600" />
-                    ) : (
-                      <Copy size={18} className="text-gray-600" />
-                    )}
+                  <button onClick={() => handleCopy(item.value, item.label)} className="p-2 hover:bg-gray-200 rounded-lg transition">
+                    {copied === item.label ? <Check size={18} className="text-green-600" /> : <Copy size={18} className="text-gray-600" />}
                   </button>
                 )}
               </div>
             ))}
           </div>
         </div>
-
         <div>
           <h4 className="font-semibold text-black mb-3 flex items-center gap-2">
-            <MessageSquare size={18} />
-            Report a Bug or Issue
+            <MessageSquare size={18} />Report a Bug or Issue
           </h4>
-          
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Your Email</label>
-              <input
-                type="email"
-                value={bugReport.email}
-                onChange={(e) => setBugReport({ ...bugReport, email: e.target.value })}
-                className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none text-sm"
-                placeholder="your.email@example.com"
-                required
-              />
+              <input type="email" value={bugReport.email} onChange={(e) => setBugReport({ ...bugReport, email: e.target.value })} className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none text-sm" placeholder="your.email@example.com" required />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-              <input
-                type="text"
-                value={bugReport.subject}
-                onChange={(e) => setBugReport({ ...bugReport, subject: e.target.value })}
-                className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none text-sm"
-                placeholder="Brief description of the issue"
-                required
-              />
+              <input type="text" value={bugReport.subject} onChange={(e) => setBugReport({ ...bugReport, subject: e.target.value })} className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none text-sm" placeholder="Brief description of the issue" required />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <textarea
-                value={bugReport.description}
-                onChange={(e) => setBugReport({ ...bugReport, description: e.target.value })}
-                className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none text-sm"
-                rows={4}
-                placeholder="Please describe the bug or issue in detail..."
-                required
-              />
+              <textarea value={bugReport.description} onChange={(e) => setBugReport({ ...bugReport, description: e.target.value })} className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none text-sm" rows={4} placeholder="Please describe the bug or issue in detail..." required />
             </div>
-
             <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3">
               <div className="flex gap-2">
                 <AlertCircle size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-800">
-                  We typically respond within 24-48 hours. For urgent matters, please call our support line.
-                </p>
+                <p className="text-xs text-blue-800">We typically respond within 24-48 hours. For urgent matters, please call our support line.</p>
               </div>
             </div>
-
-            <button
-              type="submit"
-              disabled={sending}
-              className="w-full bg-pink-600 text-white py-3 rounded-lg font-semibold hover:bg-pink-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
-            >
+            <button type="submit" disabled={sending} className="w-full bg-pink-600 text-white py-3 rounded-lg font-semibold hover:bg-pink-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
               {sending ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
@@ -928,20 +679,13 @@ const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
                 </>
               ) : (
                 <>
-                  <Send size={18} />
-                  Send Report
+                  <Send size={18} />Send Report
                 </>
               )}
             </button>
           </form>
         </div>
-
-        <button
-          onClick={closeModal}
-          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition"
-        >
-          Close
-        </button>
+        <button onClick={closeModal} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold hover:bg-gray-50 transition">Close</button>
       </div>
     </ModalWrapper>
   );
@@ -954,21 +698,13 @@ const ModalWrapper = ({ title, onClose, icon: Icon, children }) => {
         <div className="sticky top-0 bg-white border-b-2 border-gray-200 p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
-                <ArrowLeft size={20} />
-              </button>
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition"><ArrowLeft size={20} /></button>
               <div className="flex items-center gap-3">
-                {Icon && (
-                  <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
-                    <Icon className="text-white" size={20} />
-                  </div>
-                )}
+                {Icon && <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center"><Icon className="text-white" size={20} /></div>}
                 <h2 className="text-xl font-bold text-black">{title}</h2>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
-              <X size={20} />
-            </button>
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition"><X size={20} /></button>
           </div>
         </div>
         <div className="p-6">{children}</div>
