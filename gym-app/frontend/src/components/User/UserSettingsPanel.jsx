@@ -1,4 +1,5 @@
 // frontend/src/components/User/UserSettingsPanel.jsx
+// FINAL VERSION - WITH PAGE RELOAD TO ENSURE PICTURES SHOW EVERYWHERE
 import React, { useState, useEffect } from 'react';
 import { 
   User, Bell, Lock, CreditCard, Mail, Phone, Save, Eye, EyeOff, 
@@ -8,16 +9,21 @@ import {
 import { useApp } from '../../context/AppContext';
 import API from '../../api/api';
 
-// Profile Picture Component - COMPLETELY FIXED
-const ProfilePicture = ({ user, size = 'md', className = '', refreshTrigger = 0 }) => {
+// ProfilePicture Component with Cache Busting
+const ProfilePicture = ({ user, size = 'md', className = '' }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
-  
-  // Reset state when user profile picture changes
+  const [imageUrl, setImageUrl] = useState('');
+
   useEffect(() => {
-    setImageError(false);
-    setImageLoaded(false);
-  }, [user?._id, user?.profilePicture, refreshTrigger]);
+    if (user?.profilePicture && user.profilePicture.startsWith('http')) {
+      setImageUrl(`${user.profilePicture}?t=${Date.now()}`);
+      setImageError(false);
+      setImageLoaded(false);
+    } else {
+      setImageUrl('');
+    }
+  }, [user?._id, user?.profilePicture]);
 
   const sizeClasses = {
     sm: 'w-10 h-10 text-sm',
@@ -27,7 +33,6 @@ const ProfilePicture = ({ user, size = 'md', className = '', refreshTrigger = 0 
   };
 
   const handleImageError = (e) => {
-    console.warn('Image load failed');
     setImageError(true);
     if (e.target) e.target.style.display = 'none';
   };
@@ -36,7 +41,7 @@ const ProfilePicture = ({ user, size = 'md', className = '', refreshTrigger = 0 
     setImageLoaded(true);
   };
 
-  const shouldShowAvatar = !user?.profilePicture || imageError || !user.profilePicture.startsWith('http');
+  const shouldShowAvatar = !imageUrl || imageError;
 
   if (shouldShowAvatar) {
     return (
@@ -57,14 +62,14 @@ const ProfilePicture = ({ user, size = 'md', className = '', refreshTrigger = 0 
         <div className={`${sizeClasses[size]} bg-gray-200 rounded-full animate-pulse border-4 border-gray-200 flex-shrink-0 ${className}`} />
       )}
       <img 
-        key={`${user._id}-${user.profilePicture}-${refreshTrigger}`}
-        src={`${user.profilePicture}?t=${Date.now()}`}
+        key={imageUrl}
+        src={imageUrl}
         alt={user?.name || 'User'}
         className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
         onError={handleImageError}
         onLoad={handleImageLoad}
         loading="eager"
-        referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
       />
     </>
   );
@@ -75,15 +80,10 @@ const UserSettingsPanel = () => {
   const [activeModal, setActiveModal] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
-  const [ setPictureRefresh] = useState(0);
 
   const closeModal = () => {
     setActiveModal(null);
     setMessage(null);
-  };
-
-  const triggerPictureRefresh = () => {
-    setPictureRefresh(prev => prev + 1);
   };
 
   const settingsMenu = [
@@ -196,7 +196,7 @@ const UserSettingsPanel = () => {
       </div>
 
       {activeModal === 'profile' && <ProfileModal closeModal={closeModal} currentUser={currentUser} setCurrentUser={setCurrentUser} message={message} setMessage={setMessage} loading={loading} setLoading={setLoading} />}
-      {activeModal === 'picture' && <PictureModal closeModal={closeModal} currentUser={currentUser} setCurrentUser={setCurrentUser} message={message} setMessage={setMessage} triggerPictureRefresh={triggerPictureRefresh} />}
+      {activeModal === 'picture' && <PictureModal closeModal={closeModal} currentUser={currentUser} setCurrentUser={setCurrentUser} message={message} setMessage={setMessage} />}
       {activeModal === 'password' && <PasswordModal closeModal={closeModal} message={message} setMessage={setMessage} loading={loading} setLoading={setLoading} />}
       {activeModal === 'notifications' && <NotificationsModal closeModal={closeModal} message={message} setMessage={setMessage} />}
       {activeModal === 'membership' && <MembershipModal closeModal={closeModal} currentUser={currentUser} />}
@@ -255,7 +255,7 @@ const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
             type="text"
             value={profileData.name}
             onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
             required
           />
         </div>
@@ -269,7 +269,7 @@ const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
             type="email"
             value={profileData.email}
             onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
             required
           />
         </div>
@@ -284,7 +284,7 @@ const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
             value={profileData.phone}
             onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
             pattern="[0-9]{11}"
-            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
             required
           />
           <p className="text-xs text-gray-500 mt-1">Must be 11 digits</p>
@@ -294,7 +294,7 @@ const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition disabled:opacity-50"
+            className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50"
           >
             <Save className="inline mr-2" size={16} />
             {loading ? 'Saving...' : 'Save Changes'}
@@ -312,13 +312,12 @@ const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
   );
 };
 
-// COMPLETELY FIXED Picture Modal - No Page Reload
-const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMessage, triggerPictureRefresh }) => {
+// FIXED: Picture Modal with Page Reload
+const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMessage }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  const [localRefresh, setLocalRefresh] = useState(0);
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
@@ -354,41 +353,35 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
       const formData = new FormData();
       formData.append('profilePicture', selectedFile);
 
-      console.log('📤 Uploading...');
+      console.log('📤 Uploading profile picture...');
       
       const response = await API.post('/users/upload-profile-picture', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
+      console.log('✅ Upload response:', response.data);
+
       if (response.data.success) {
-        console.log('✅ Upload success:', response.data.profilePicture);
-        
-        // CRITICAL: Fetch fresh user data
+        // Fetch fresh user data
         const userResponse = await API.get('/auth/me');
         const freshUser = userResponse.data;
         
-        console.log('✅ Fresh user:', freshUser.profilePicture);
+        console.log('✅ Fresh user data:', freshUser);
         
-        // Update everywhere
+        // Update state and localStorage
         setCurrentUser(freshUser);
         localStorage.setItem('currentUser', JSON.stringify(freshUser));
-        
-        // Clear preview and trigger refresh
-        setPreviewUrl(null);
-        setSelectedFile(null);
-        setLocalRefresh(prev => prev + 1);
-        triggerPictureRefresh();
 
-        setMessage({ type: 'success', text: 'Profile picture updated successfully!' });
+        setMessage({ type: 'success', text: 'Profile picture updated! Refreshing page...' });
         
+        // CRITICAL: Reload page to show picture everywhere
         setTimeout(() => {
-          closeModal();
+          window.location.reload();
         }, 1500);
       }
     } catch (err) {
       console.error('❌ Upload error:', err);
       setUploadError(err.response?.data?.message || 'Failed to upload image');
-    } finally {
       setUploading(false);
     }
   };
@@ -406,15 +399,14 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
         
         setCurrentUser(freshUser);
         localStorage.setItem('currentUser', JSON.stringify(freshUser));
-        setLocalRefresh(prev => prev + 1);
-        triggerPictureRefresh();
         
-        setMessage({ type: 'success', text: 'Profile picture removed successfully!' });
-        setTimeout(() => closeModal(), 1500);
+        setMessage({ type: 'success', text: 'Profile picture removed! Refreshing...' });
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
       }
     } catch (err) {
       setUploadError(err.response?.data?.message || 'Failed to delete picture');
-    } finally {
       setUploading(false);
     }
   };
@@ -440,12 +432,12 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
               className="w-40 h-40 rounded-full object-cover border-4 border-gray-200"
             />
           ) : (
-            <ProfilePicture user={currentUser} size="lg" refreshTrigger={localRefresh} />
+            <ProfilePicture user={currentUser} size="lg" />
           )}
 
           <label
             htmlFor="picture-upload"
-            className="absolute bottom-0 right-0 w-12 h-12 bg-black text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-gray-800 transition shadow-lg"
+            className="absolute bottom-0 right-0 w-12 h-12 bg-purple-600 text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-purple-700 transition shadow-lg"
           >
             <Camera size={20} />
           </label>
@@ -473,7 +465,7 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
         {selectedFile && (
           <>
             <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3 text-left">
-              <p className="text-sm text-blue-800 font-semibold">Selected: {selectedFile.name}</p>
+              <p className="text-sm text-blue-800 font-semibold">📎 {selectedFile.name}</p>
               <p className="text-xs text-blue-600">Size: {(selectedFile.size / 1024).toFixed(2)} KB</p>
             </div>
 
@@ -481,7 +473,7 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
               <button
                 onClick={handleUpload}
                 disabled={uploading}
-                className="flex-1 bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {uploading ? (
                   <>
@@ -596,7 +588,7 @@ const PasswordModal = ({ closeModal, message, setMessage, loading, setLoading })
               type={showPassword ? 'text' : 'password'}
               value={passwordData.currentPassword}
               onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none pr-12"
+              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none pr-12"
               required
             />
             <button
@@ -615,7 +607,7 @@ const PasswordModal = ({ closeModal, message, setMessage, loading, setLoading })
             type={showPassword ? 'text' : 'password'}
             value={passwordData.newPassword}
             onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none"
             minLength={6}
             required
           />
@@ -628,7 +620,7 @@ const PasswordModal = ({ closeModal, message, setMessage, loading, setLoading })
             type={showPassword ? 'text' : 'password'}
             value={passwordData.confirmPassword}
             onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none"
+            className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none"
             required
           />
         </div>
@@ -637,7 +629,7 @@ const PasswordModal = ({ closeModal, message, setMessage, loading, setLoading })
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition disabled:opacity-50"
+            className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50"
           >
             {loading ? 'Changing...' : 'Change Password'}
           </button>
@@ -709,7 +701,7 @@ const NotificationsModal = ({ closeModal, message, setMessage }) => {
                 checked={notifications[item.key]}
                 onChange={() => handleToggle(item.key)}
               />
-              <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black"></div>
+              <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
             </label>
           </div>
         ))}
@@ -718,7 +710,7 @@ const NotificationsModal = ({ closeModal, message, setMessage }) => {
       <div className="flex gap-3 pt-6">
         <button
           onClick={handleSave}
-          className="flex-1 bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition"
+          className="flex-1 bg-orange-600 text-white py-3 rounded-lg font-semibold hover:bg-orange-700 transition"
         >
           <Save className="inline mr-2" size={16} />
           Save Preferences
@@ -766,7 +758,7 @@ const MembershipModal = ({ closeModal, currentUser }) => {
 
       <button
         onClick={closeModal}
-        className="w-full mt-6 px-4 py-3 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition"
+        className="w-full mt-6 px-4 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition"
       >
         Close
       </button>
@@ -774,7 +766,7 @@ const MembershipModal = ({ closeModal, currentUser }) => {
   );
 };
 
-// FIXED Bug Report - Actually Sends to Backend
+// FIXED: Support Modal - Actually Sends to Backend
 const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
   const [bugReport, setBugReport] = useState({
     subject: '',
@@ -801,21 +793,27 @@ const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
     setSending(true);
 
     try {
-      console.log('📤 Sending bug report:', bugReport);
+      console.log('📤 Sending bug report to /api/bug-reports');
+      console.log('Data:', bugReport);
       
-      // FIXED: Actually call the API
       const response = await API.post('/bug-reports', bugReport);
       
       console.log('✅ Bug report response:', response.data);
       
-      if (response.data.success) {
-        setMessage({ type: 'success', text: 'Bug report sent successfully! We\'ll get back to you soon.' });
+      if (response.data.success || response.data.reportId) {
+        setMessage({ type: 'success', text: 'Bug report sent successfully! Admin will review it soon.' });
         setBugReport({ subject: '', description: '', email: currentUser?.email || '' });
         setTimeout(() => closeModal(), 2000);
+      } else {
+        throw new Error('Unexpected response format');
       }
     } catch (error) {
       console.error('❌ Bug report error:', error);
-      setMessage({ type: 'error', text: 'Failed to send report. Please try again.' });
+      console.error('Error response:', error.response?.data);
+      setMessage({ 
+        type: 'error', 
+        text: error.response?.data?.message || 'Failed to send report. Please try again.' 
+      });
     } finally {
       setSending(false);
     }
@@ -879,7 +877,7 @@ const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
                 type="email"
                 value={bugReport.email}
                 onChange={(e) => setBugReport({ ...bugReport, email: e.target.value })}
-                className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm"
+                className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none text-sm"
                 placeholder="your.email@example.com"
                 required
               />
@@ -891,7 +889,7 @@ const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
                 type="text"
                 value={bugReport.subject}
                 onChange={(e) => setBugReport({ ...bugReport, subject: e.target.value })}
-                className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm"
+                className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none text-sm"
                 placeholder="Brief description of the issue"
                 required
               />
@@ -902,7 +900,7 @@ const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
               <textarea
                 value={bugReport.description}
                 onChange={(e) => setBugReport({ ...bugReport, description: e.target.value })}
-                className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-black focus:outline-none text-sm"
+                className="w-full p-2.5 border-2 border-gray-300 rounded-lg focus:border-pink-500 focus:outline-none text-sm"
                 rows={4}
                 placeholder="Please describe the bug or issue in detail..."
                 required
@@ -921,7 +919,7 @@ const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
             <button
               type="submit"
               disabled={sending}
-              className="w-full bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full bg-pink-600 text-white py-3 rounded-lg font-semibold hover:bg-pink-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {sending ? (
                 <>
