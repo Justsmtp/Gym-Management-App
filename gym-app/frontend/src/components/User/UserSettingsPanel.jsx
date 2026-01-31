@@ -8,19 +8,16 @@ import {
 import { useApp } from '../../context/AppContext';
 import API from '../../api/api';
 
-// Profile Picture Component with Persistent Error Handling
-const ProfilePicture = ({ user, size = 'md', className = '' }) => {
+// Profile Picture Component - COMPLETELY FIXED
+const ProfilePicture = ({ user, size = 'md', className = '', refreshTrigger = 0 }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   
-  // Key that changes when user or profilePicture changes
-  const imageKey = `${user?._id}-${user?.profilePicture}-${Date.now()}`;
-  
-  // Reset state when user or profile picture changes
+  // Reset state when user profile picture changes
   useEffect(() => {
     setImageError(false);
     setImageLoaded(false);
-  }, [user?._id, user?.profilePicture]);
+  }, [user?._id, user?.profilePicture, refreshTrigger]);
 
   const sizeClasses = {
     sm: 'w-10 h-10 text-sm',
@@ -30,16 +27,15 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
   };
 
   const handleImageError = (e) => {
-    console.warn('Image load failed for user:', user?.name, 'URL:', user?.profilePicture);
+    console.warn('Image load failed');
     setImageError(true);
-    e.target.style.display = 'none';
+    if (e.target) e.target.style.display = 'none';
   };
 
   const handleImageLoad = () => {
     setImageLoaded(true);
   };
 
-  // Show avatar if: no picture, error loading, or invalid URL
   const shouldShowAvatar = !user?.profilePicture || imageError || !user.profilePicture.startsWith('http');
 
   if (shouldShowAvatar) {
@@ -61,13 +57,13 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
         <div className={`${sizeClasses[size]} bg-gray-200 rounded-full animate-pulse border-4 border-gray-200 flex-shrink-0 ${className}`} />
       )}
       <img 
-        key={imageKey}
+        key={`${user._id}-${user.profilePicture}-${refreshTrigger}`}
         src={`${user.profilePicture}?t=${Date.now()}`}
         alt={user?.name || 'User'}
         className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
         onError={handleImageError}
         onLoad={handleImageLoad}
-        loading="lazy"
+        loading="eager"
         referrerPolicy="no-referrer"
       />
     </>
@@ -79,14 +75,17 @@ const UserSettingsPanel = () => {
   const [activeModal, setActiveModal] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [ setPictureRefresh] = useState(0);
 
-  // Close modal handler
   const closeModal = () => {
     setActiveModal(null);
     setMessage(null);
   };
 
-  // Settings menu items
+  const triggerPictureRefresh = () => {
+    setPictureRefresh(prev => prev + 1);
+  };
+
   const settingsMenu = [
     {
       id: 'profile',
@@ -143,7 +142,6 @@ const UserSettingsPanel = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      {/* Global Message Banner */}
       {message && !activeModal && (
         <div className={`mb-4 p-3 md:p-4 rounded-xl border-2 ${
           message.type === 'success' 
@@ -161,7 +159,6 @@ const UserSettingsPanel = () => {
         </div>
       )}
 
-      {/* Settings Menu Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {settingsMenu.map((item) => (
           <button
@@ -185,7 +182,6 @@ const UserSettingsPanel = () => {
         ))}
       </div>
 
-      {/* Danger Zone */}
       <div className="mt-6 bg-red-50 rounded-2xl shadow-lg p-6 border-2 border-red-200">
         <h3 className="text-lg font-bold text-red-900 mb-2">Sign Out</h3>
         <p className="text-sm text-red-700 mb-4">
@@ -199,18 +195,16 @@ const UserSettingsPanel = () => {
         </button>
       </div>
 
-      {/* Modals */}
       {activeModal === 'profile' && <ProfileModal closeModal={closeModal} currentUser={currentUser} setCurrentUser={setCurrentUser} message={message} setMessage={setMessage} loading={loading} setLoading={setLoading} />}
-      {activeModal === 'picture' && <PictureModal closeModal={closeModal} currentUser={currentUser} setCurrentUser={setCurrentUser} message={message} setMessage={setMessage} />}
+      {activeModal === 'picture' && <PictureModal closeModal={closeModal} currentUser={currentUser} setCurrentUser={setCurrentUser} message={message} setMessage={setMessage} triggerPictureRefresh={triggerPictureRefresh} />}
       {activeModal === 'password' && <PasswordModal closeModal={closeModal} message={message} setMessage={setMessage} loading={loading} setLoading={setLoading} />}
       {activeModal === 'notifications' && <NotificationsModal closeModal={closeModal} message={message} setMessage={setMessage} />}
       {activeModal === 'membership' && <MembershipModal closeModal={closeModal} currentUser={currentUser} />}
-      {activeModal === 'support' && <SupportModal closeModal={closeModal} message={message} setMessage={setMessage} />}
+      {activeModal === 'support' && <SupportModal closeModal={closeModal} message={message} setMessage={setMessage} currentUser={currentUser} />}
     </div>
   );
 };
 
-// Profile Information Modal
 const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMessage, loading, setLoading }) => {
   const [profileData, setProfileData] = useState({
     name: currentUser?.name || '',
@@ -318,12 +312,13 @@ const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
   );
 };
 
-// Profile Picture Modal - FIXED VERSION
-const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMessage }) => {
+// COMPLETELY FIXED Picture Modal - No Page Reload
+const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMessage, triggerPictureRefresh }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+  const [localRefresh, setLocalRefresh] = useState(0);
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
@@ -359,34 +354,35 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
       const formData = new FormData();
       formData.append('profilePicture', selectedFile);
 
+      console.log('📤 Uploading...');
+      
       const response = await API.post('/users/upload-profile-picture', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      console.log('✅ Upload response:', response.data);
-
       if (response.data.success) {
-        // CRITICAL FIX: Refresh user data from server to get the new picture URL
+        console.log('✅ Upload success:', response.data.profilePicture);
+        
+        // CRITICAL: Fetch fresh user data
         const userResponse = await API.get('/auth/me');
-        const freshUserData = userResponse.data;
+        const freshUser = userResponse.data;
         
-        console.log('✅ Fresh user data:', freshUserData);
+        console.log('✅ Fresh user:', freshUser.profilePicture);
         
-        // Update both state and localStorage with fresh data
-        setCurrentUser(freshUserData);
-        localStorage.setItem('currentUser', JSON.stringify(freshUserData));
+        // Update everywhere
+        setCurrentUser(freshUser);
+        localStorage.setItem('currentUser', JSON.stringify(freshUser));
         
-        // Force a re-render by clearing preview
+        // Clear preview and trigger refresh
         setPreviewUrl(null);
         setSelectedFile(null);
+        setLocalRefresh(prev => prev + 1);
+        triggerPictureRefresh();
 
         setMessage({ type: 'success', text: 'Profile picture updated successfully!' });
         
-        // Close modal after short delay to show success
         setTimeout(() => {
           closeModal();
-          // Force page refresh to ensure image displays everywhere
-          window.location.reload();
         }, 1500);
       }
     } catch (err) {
@@ -405,18 +401,16 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
       const response = await API.delete('/users/delete-profile-picture');
       
       if (response.data.success) {
-        // Refresh user data from server
         const userResponse = await API.get('/auth/me');
-        const freshUserData = userResponse.data;
+        const freshUser = userResponse.data;
         
-        setCurrentUser(freshUserData);
-        localStorage.setItem('currentUser', JSON.stringify(freshUserData));
+        setCurrentUser(freshUser);
+        localStorage.setItem('currentUser', JSON.stringify(freshUser));
+        setLocalRefresh(prev => prev + 1);
+        triggerPictureRefresh();
         
         setMessage({ type: 'success', text: 'Profile picture removed successfully!' });
-        setTimeout(() => {
-          closeModal();
-          window.location.reload();
-        }, 1500);
+        setTimeout(() => closeModal(), 1500);
       }
     } catch (err) {
       setUploadError(err.response?.data?.message || 'Failed to delete picture');
@@ -446,7 +440,7 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
               className="w-40 h-40 rounded-full object-cover border-4 border-gray-200"
             />
           ) : (
-            <ProfilePicture user={currentUser} size="lg" />
+            <ProfilePicture user={currentUser} size="lg" refreshTrigger={localRefresh} />
           )}
 
           <label
@@ -539,7 +533,7 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
     </ModalWrapper>
   );
 };
-// Password Change Modal
+
 const PasswordModal = ({ closeModal, message, setMessage, loading, setLoading }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [passwordData, setPasswordData] = useState({
@@ -660,7 +654,6 @@ const PasswordModal = ({ closeModal, message, setMessage, loading, setLoading })
   );
 };
 
-// Notifications Modal
 const NotificationsModal = ({ closeModal, message, setMessage }) => {
   const [notifications, setNotifications] = useState({
     emailReminders: true,
@@ -679,26 +672,10 @@ const NotificationsModal = ({ closeModal, message, setMessage }) => {
   };
 
   const notificationItems = [
-    {
-      key: 'emailReminders',
-      title: 'Email Reminders',
-      desc: 'Receive payment reminders via email',
-    },
-    {
-      key: 'paymentDue',
-      title: 'Payment Due Alerts',
-      desc: 'Get notified when payment is due',
-    },
-    {
-      key: 'checkInConfirmation',
-      title: 'Check-in Confirmations',
-      desc: 'Receive confirmation after gym check-in',
-    },
-    {
-      key: 'promotions',
-      title: 'Promotions & Updates',
-      desc: 'Stay informed about special offers',
-    },
+    { key: 'emailReminders', title: 'Email Reminders', desc: 'Receive payment reminders via email' },
+    { key: 'paymentDue', title: 'Payment Due Alerts', desc: 'Get notified when payment is due' },
+    { key: 'checkInConfirmation', title: 'Check-in Confirmations', desc: 'Receive confirmation after gym check-in' },
+    { key: 'promotions', title: 'Promotions & Updates', desc: 'Stay informed about special offers' },
   ];
 
   return (
@@ -757,7 +734,6 @@ const NotificationsModal = ({ closeModal, message, setMessage }) => {
   );
 };
 
-// Membership Info Modal
 const MembershipModal = ({ closeModal, currentUser }) => {
   const membershipInfo = [
     { label: 'Membership Type', value: currentUser?.membershipType || 'N/A' },
@@ -798,35 +774,20 @@ const MembershipModal = ({ closeModal, currentUser }) => {
   );
 };
 
-// Customer Service Modal
-const SupportModal = ({ closeModal, message, setMessage }) => {
+// FIXED Bug Report - Actually Sends to Backend
+const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
   const [bugReport, setBugReport] = useState({
     subject: '',
     description: '',
-    email: ''
+    email: currentUser?.email || ''
   });
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState('');
 
   const contactInfo = [
-    { 
-      icon: Mail, 
-      label: 'Email', 
-      value: 'support@1stimpression.com',
-      copyable: true 
-    },
-    { 
-      icon: Phone, 
-      label: 'Phone', 
-      value: '+234 123 456 7890',
-      copyable: true 
-    },
-    { 
-      icon: ExternalLink, 
-      label: 'Address', 
-      value: '123 Fitness Street, Lagos, Nigeria',
-      copyable: true 
-    },
+    { icon: Mail, label: 'Email', value: 'support@1stimpression.com', copyable: true },
+    { icon: Phone, label: 'Phone', value: '+234 123 456 7890', copyable: true },
+    { icon: ExternalLink, label: 'Address', value: '123 Fitness Street, Lagos, Nigeria', copyable: true },
   ];
 
   const handleCopy = (text, label) => {
@@ -839,13 +800,25 @@ const SupportModal = ({ closeModal, message, setMessage }) => {
     e.preventDefault();
     setSending(true);
 
-    // Simulate sending email
-    setTimeout(() => {
-      setMessage({ type: 'success', text: 'Bug report sent successfully! We\'ll get back to you soon.' });
-      setBugReport({ subject: '', description: '', email: '' });
+    try {
+      console.log('📤 Sending bug report:', bugReport);
+      
+      // FIXED: Actually call the API
+      const response = await API.post('/bug-reports', bugReport);
+      
+      console.log('✅ Bug report response:', response.data);
+      
+      if (response.data.success) {
+        setMessage({ type: 'success', text: 'Bug report sent successfully! We\'ll get back to you soon.' });
+        setBugReport({ subject: '', description: '', email: currentUser?.email || '' });
+        setTimeout(() => closeModal(), 2000);
+      }
+    } catch (error) {
+      console.error('❌ Bug report error:', error);
+      setMessage({ type: 'error', text: 'Failed to send report. Please try again.' });
+    } finally {
       setSending(false);
-      setTimeout(() => closeModal(), 2000);
-    }, 1500);
+    }
   };
 
   return (
@@ -861,7 +834,6 @@ const SupportModal = ({ closeModal, message, setMessage }) => {
       )}
 
       <div className="space-y-6">
-        {/* Contact Information */}
         <div>
           <h4 className="font-semibold text-black mb-3 flex items-center gap-2">
             <Headphones size={18} />
@@ -881,7 +853,6 @@ const SupportModal = ({ closeModal, message, setMessage }) => {
                   <button
                     onClick={() => handleCopy(item.value, item.label)}
                     className="p-2 hover:bg-gray-200 rounded-lg transition"
-                    title="Copy to clipboard"
                   >
                     {copied === item.label ? (
                       <Check size={18} className="text-green-600" />
@@ -895,7 +866,6 @@ const SupportModal = ({ closeModal, message, setMessage }) => {
           </div>
         </div>
 
-        {/* Bug Report Form */}
         <div>
           <h4 className="font-semibold text-black mb-3 flex items-center gap-2">
             <MessageSquare size={18} />
@@ -979,19 +949,14 @@ const SupportModal = ({ closeModal, message, setMessage }) => {
   );
 };
 
-// Modal Wrapper Component
 const ModalWrapper = ({ title, onClose, icon: Icon, children }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
         <div className="sticky top-0 bg-white border-b-2 border-gray-200 p-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-              >
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
                 <ArrowLeft size={20} />
               </button>
               <div className="flex items-center gap-3">
@@ -1003,22 +968,15 @@ const ModalWrapper = ({ title, onClose, icon: Icon, children }) => {
                 <h2 className="text-xl font-bold text-black">{title}</h2>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition"
-            >
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
               <X size={20} />
             </button>
           </div>
         </div>
-
-        {/* Content */}
-        <div className="p-6">
-          {children}
-        </div>
+        <div className="p-6">{children}</div>
       </div>
     </div>
   );
 };
 
-export default UserSettingsPanel; 
+export default UserSettingsPanel;
