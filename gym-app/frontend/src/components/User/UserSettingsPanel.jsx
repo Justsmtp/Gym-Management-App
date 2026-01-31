@@ -6,7 +6,7 @@ import {
   Headphones, MessageSquare, AlertCircle, ExternalLink, Send
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import API from '../../api/api';
+import api from '../../api/api';
 
 // Profile Picture Component with Persistent Error Handling
 const ProfilePicture = ({ user, size = 'md', className = '' }) => {
@@ -14,13 +14,13 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   
   // Key that changes when user or profilePicture changes
-  const imageKey = `${user?._id}-${user?.profilePicture}`;
+  const imageKey = `${user?._id}-${user?.profilePicture}-${Date.now()}`;
   
   // Reset state when user or profile picture changes
   useEffect(() => {
     setImageError(false);
     setImageLoaded(false);
-  }, [imageKey]);
+  }, [user?._id, user?.profilePicture]);
 
   const sizeClasses = {
     sm: 'w-10 h-10 text-sm',
@@ -205,7 +205,7 @@ const UserSettingsPanel = () => {
       {activeModal === 'password' && <PasswordModal closeModal={closeModal} message={message} setMessage={setMessage} loading={loading} setLoading={setLoading} />}
       {activeModal === 'notifications' && <NotificationsModal closeModal={closeModal} message={message} setMessage={setMessage} />}
       {activeModal === 'membership' && <MembershipModal closeModal={closeModal} currentUser={currentUser} />}
-      {activeModal === 'support' && <SupportModal closeModal={closeModal} message={message} setMessage={setMessage} />}
+      {activeModal === 'support' && <SupportModal closeModal={closeModal} message={message} setMessage={setMessage} currentUser={currentUser} />}
     </div>
   );
 };
@@ -318,7 +318,7 @@ const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
   );
 };
 
-// Profile Picture Modal
+// Profile Picture Modal - FIXED VERSION
 const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMessage }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -359,22 +359,39 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
       const formData = new FormData();
       formData.append('profilePicture', selectedFile);
 
+      console.log('📤 Uploading profile picture...');
+
       const response = await API.post('/users/upload-profile-picture', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
+      console.log('✅ Upload response:', response.data);
+
       if (response.data.success) {
+        // Update user with new profile picture
         const updatedUser = {
           ...currentUser,
           profilePicture: response.data.profilePicture
         };
+        
         setCurrentUser(updatedUser);
         localStorage.setItem('currentUser', JSON.stringify(updatedUser));
 
+        // Show success message in the modal
         setMessage({ type: 'success', text: 'Profile picture updated successfully!' });
-        setTimeout(() => closeModal(), 2000);
+        
+        // Reset form state
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        
+        // DON'T close modal immediately - let user see the success message
+        // Close after 2 seconds
+        setTimeout(() => {
+          closeModal();
+        }, 2000);
       }
     } catch (err) {
+      console.error('❌ Upload error:', err);
       setUploadError(err.response?.data?.message || 'Failed to upload image');
     } finally {
       setUploading(false);
@@ -394,7 +411,11 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
         localStorage.setItem('currentUser', JSON.stringify(updatedUser));
         
         setMessage({ type: 'success', text: 'Profile picture removed successfully!' });
-        setTimeout(() => closeModal(), 2000);
+        
+        // Close after showing message
+        setTimeout(() => {
+          closeModal();
+        }, 2000);
       }
     } catch (err) {
       setUploadError(err.response?.data?.message || 'Failed to delete picture');
@@ -806,7 +827,6 @@ const SupportModal = ({ closeModal, message, setMessage, currentUser }) => {
     try {
       console.log('📤 Sending bug report:', bugReport);
       
-      // FIXED: Actually call the API
       const response = await API.post('/bug-reports', bugReport);
       
       console.log('✅ Bug report response:', response.data);
@@ -994,4 +1014,4 @@ const ModalWrapper = ({ title, onClose, icon: Icon, children }) => {
   );
 };
 
-export default UserSettingsPanel; 
+export default UserSettingsPanel;
