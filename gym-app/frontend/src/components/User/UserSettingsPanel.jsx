@@ -1,4 +1,4 @@
-// frontend/src/components/User/UserSettingsPanel.jsx - FINAL FIX
+// frontend/src/components/User/UserSettingsPanel.jsx
 import React, { useState, useEffect } from 'react';
 import { 
   User, Bell, Lock, CreditCard, Mail, Phone, Save, Eye, EyeOff, 
@@ -8,7 +8,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import API from '../../api/api';
 
-// Profile Picture Component - COMPLETELY FIXED VERSION
+// Profile Picture Component 
 const ProfilePicture = ({ user, size = 'md', className = '' }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -422,11 +422,6 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
         setTimeout(() => {
           console.log('🚪 Closing modal');
           closeModal();
-          
-          // Force a page refresh to ensure all components update
-          setTimeout(() => {
-            window.location.reload();
-          }, 100);
         }, 1500);
       }
     } catch (err) {
@@ -453,7 +448,6 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
         
         setTimeout(() => {
           closeModal();
-          window.location.reload();
         }, 1500);
       }
     } catch (err) {
