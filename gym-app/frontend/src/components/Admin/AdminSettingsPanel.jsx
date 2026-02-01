@@ -78,7 +78,7 @@ const AdminSettingsPanel = () => {
             <p className={`text-sm md:text-base font-semibold ${
               message.type === 'success' ? 'text-green-800' : 'text-red-800'
             }`}>
-              {message.type === 'success' ? '✅' : '❌'} {message.text}
+              {message.type === 'success' ? '' : ''} {message.text}
             </p>
             <button onClick={() => setMessage(null)} className="text-gray-600 text-lg">✕</button>
           </div>
@@ -199,7 +199,7 @@ const PlansModal = ({ closeModal, message, setMessage }) => {
           message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
         }`}>
           <p className={`text-sm font-semibold ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
-            {message.type === 'success' ? '✅' : '❌'} {message.text}
+            {message.type === 'success' ? '' : ''} {message.text}
           </p>
         </div>
       )}
@@ -320,6 +320,7 @@ const PlansModal = ({ closeModal, message, setMessage }) => {
 };
 
 // Bug Reports Modal
+
 const BugReportsModal = ({ closeModal, message, setMessage }) => {
   const [reports, setReports] = useState([]);
   const [stats, setStats] = useState(null);
@@ -335,16 +336,39 @@ const BugReportsModal = ({ closeModal, message, setMessage }) => {
   const fetchReports = async () => {
     try {
       setLoading(true);
-      const params = filterStatus !== 'all' ? { status: filterStatus } : {};
-      const data = await api.get('/bug-reports', { params });
+      
+      // Build query string
+      const queryParams = new URLSearchParams();
+      if (filterStatus !== 'all') {
+        queryParams.append('status', filterStatus);
+      }
+      
+      const queryString = queryParams.toString();
+      const endpoint = queryString ? `/bug-reports?${queryString}` : '/bug-reports';
+      
+      console.log(' Fetching bug reports from:', endpoint);
+      
+      // Api returns full axios response, so we need .data
+      const response = await api.get(endpoint);
+      const data = response.data; 
+      
+      console.log(' Bug reports response:', data);
       
       if (data.success) {
-        setReports(data.reports);
-        setStats(data.stats);
+        setReports(data.reports || []);
+        setStats(data.stats || {});
+        console.log(' Loaded', data.reports?.length || 0, 'reports');
+      } else {
+        console.error(' API returned success: false');
+        setMessage({ type: 'error', text: 'Failed to load bug reports' });
       }
     } catch (error) {
-      console.error('Error fetching bug reports:', error);
-      setMessage({ type: 'error', text: 'Failed to load bug reports' });
+      console.error(' Error fetching bug reports:', error);
+      console.error('Error response:', error.response?.data);
+      setMessage({ 
+        type: 'error', 
+        text: error.response?.data?.message || 'Failed to load bug reports' 
+      });
     } finally {
       setLoading(false);
     }
@@ -352,7 +376,13 @@ const BugReportsModal = ({ closeModal, message, setMessage }) => {
 
   const handleStatusUpdate = async (reportId, newStatus) => {
     try {
-      const data = await api.put(`/bug-reports/${reportId}`, { status: newStatus });
+      console.log(' Updating report status:', reportId, '→', newStatus);
+      
+      // Get .data from response
+      const response = await api.put(`/bug-reports/${reportId}`, { status: newStatus });
+      const data = response.data;
+      
+      console.log(' Status update response:', data);
       
       if (data.success) {
         setReports(reports.map(r => r._id === reportId ? data.report : r));
@@ -361,6 +391,7 @@ const BugReportsModal = ({ closeModal, message, setMessage }) => {
         fetchReports(); // Refresh to update stats
       }
     } catch (error) {
+      console.error(' Status update error:', error);
       setMessage({ type: 'error', text: 'Failed to update status' });
     }
   };
@@ -369,15 +400,23 @@ const BugReportsModal = ({ closeModal, message, setMessage }) => {
     if (!window.confirm('Are you sure you want to delete this report?')) return;
 
     try {
-      const data = await api.delete(`/bug-reports/${reportId}`);
+      console.log(' Deleting report:', reportId);
+      
+      //Get .data from response
+      const response = await api.delete(`/bug-reports/${reportId}`);
+      const data = response.data;
+      
+      console.log(' Delete response:', data);
       
       if (data.success) {
         setReports(reports.filter(r => r._id !== reportId));
         setSelectedReport(null);
         setMessage({ type: 'success', text: 'Report deleted successfully' });
         setTimeout(() => setMessage(null), 2000);
+        fetchReports(); // Refresh stats
       }
     } catch (error) {
+      console.error(' Delete error:', error);
       setMessage({ type: 'error', text: 'Failed to delete report' });
     }
   };
@@ -517,7 +556,7 @@ const BugReportsModal = ({ closeModal, message, setMessage }) => {
           message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
         }`}>
           <p className={`text-sm font-semibold ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
-            {message.type === 'success' ? '✅' : '❌'} {message.text}
+            {message.type === 'success' ? '' : ''} {message.text}
           </p>
         </div>
       )}
@@ -526,19 +565,19 @@ const BugReportsModal = ({ closeModal, message, setMessage }) => {
       {stats && (
         <div className="grid grid-cols-4 gap-2 mb-4">
           <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-yellow-800">{stats.new}</p>
+            <p className="text-2xl font-bold text-yellow-800">{stats.new || 0}</p>
             <p className="text-xs text-yellow-600">New</p>
           </div>
           <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-blue-800">{stats.inProgress}</p>
+            <p className="text-2xl font-bold text-blue-800">{stats.inProgress || 0}</p>
             <p className="text-xs text-blue-600">In Progress</p>
           </div>
           <div className="bg-green-50 border-2 border-green-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-green-800">{stats.resolved}</p>
+            <p className="text-2xl font-bold text-green-800">{stats.resolved || 0}</p>
             <p className="text-xs text-green-600">Resolved</p>
           </div>
           <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
+            <p className="text-2xl font-bold text-gray-800">{stats.total || 0}</p>
             <p className="text-xs text-gray-600">Total</p>
           </div>
         </div>
@@ -578,7 +617,14 @@ const BugReportsModal = ({ closeModal, message, setMessage }) => {
       ) : filteredReports.length === 0 ? (
         <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
           <Bug size={48} className="mx-auto text-gray-300 mb-3" />
-          <p className="text-gray-600">No reports found</p>
+          <p className="text-gray-600">
+            {reports.length === 0 ? 'No bug reports yet' : 'No reports match your search'}
+          </p>
+          {reports.length === 0 && (
+            <p className="text-sm text-gray-500 mt-2">
+              Users can submit reports from their Settings → Customer Service
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-2 max-h-[50vh] overflow-y-auto">
@@ -651,7 +697,7 @@ const NotificationsModal = ({ closeModal, message, setMessage }) => {
           message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
         }`}>
           <p className={`text-sm font-semibold ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
-            {message.type === 'success' ? '✅' : '❌'} {message.text}
+            {message.type === 'success' ? '' : ''} {message.text}
           </p>
         </div>
       )}
@@ -737,7 +783,7 @@ const EmailModal = ({ closeModal, message, setMessage }) => {
           message.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
         }`}>
           <p className={`text-sm font-semibold ${message.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
-            {message.type === 'success' ? '✅' : '❌'} {message.text}
+            {message.type === 'success' ? '' : ''} {message.text}
           </p>
         </div>
       )}
