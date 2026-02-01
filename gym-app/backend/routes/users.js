@@ -1,4 +1,4 @@
-// backend/routes/users.js
+// backend/routes/users.js - UPDATED WITH ENHANCED DEBUGGING
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -63,26 +63,42 @@ const adminAuth = async (req, res, next) => {
 };
 
 // ============================================
-// PROFILE PICTURE ROUTES
+// PROFILE PICTURE ROUTES - ENHANCED VERSION
 // ============================================
 
 // @route   POST /api/users/upload-profile-picture
 // @desc    Upload profile picture (User only)
 router.post('/upload-profile-picture', auth, upload.single('profilePicture'), async (req, res) => {
   try {
+    console.log('\n📸 ===== PROFILE PICTURE UPLOAD REQUEST =====');
+    console.log('User ID:', req.user.id);
+    console.log('File uploaded:', req.file ? 'YES' : 'NO');
+    
     if (!req.file) {
+      console.log('❌ No file in request');
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
+    console.log('File details:', {
+      filename: req.file.filename,
+      size: `${(req.file.size / 1024).toFixed(2)} KB`,
+      mimetype: req.file.mimetype
+    });
+
     const user = await User.findById(req.user.id);
     if (!user) {
+      console.log('❌ User not found:', req.user.id);
       // Clean up uploaded file
       fs.unlinkSync(req.file.path);
       return res.status(404).json({ message: 'User not found' });
     }
 
+    console.log('User found:', user.name, `(${user.email})`);
+
     // Delete old profile picture if exists
     if (user.profilePicture) {
+      console.log('Old profile picture exists:', user.profilePicture);
+      
       // Extract just the path part if it's a full URL
       const oldPath = user.profilePicture.includes('http') 
         ? user.profilePicture.split('/uploads/')[1] 
@@ -93,23 +109,53 @@ router.post('/upload-profile-picture', auth, upload.single('profilePicture'), as
       if (fs.existsSync(fullOldPath)) {
         try {
           fs.unlinkSync(fullOldPath);
-          console.log('🗑️ Deleted old profile picture');
+          console.log('🗑️ Deleted old profile picture:', fullOldPath);
         } catch (err) {
-          console.error('Error deleting old picture:', err);
+          console.error('⚠️ Error deleting old picture:', err);
         }
+      } else {
+        console.log('⚠️ Old file not found at:', fullOldPath);
       }
     }
 
     // Create full URL for the profile picture
     const profilePicturePath = `/uploads/profile-pictures/${req.file.filename}`;
-    const baseUrl = process.env.API_BASE_URL || `${req.protocol}://${req.get('host')}`;
+    
+    // Build base URL with multiple fallbacks
+    let baseUrl;
+    
+    // Priority 1: Environment variable
+    if (process.env.API_BASE_URL) {
+      baseUrl = process.env.API_BASE_URL;
+      console.log('Using API_BASE_URL from env:', baseUrl);
+    } 
+    // Priority 2: Build from request
+    else {
+      const protocol = req.protocol; // http or https
+      const host = req.get('host'); // localhost:5000 or domain.com
+      baseUrl = `${protocol}://${host}`;
+      console.log('Built base URL from request:', baseUrl);
+    }
+    
     const fullUrl = `${baseUrl}${profilePicturePath}`;
     
+    console.log('\n🔗 URL Construction:');
+    console.log('   Base URL:', baseUrl);
+    console.log('   Path:', profilePicturePath);
+    console.log('   Full URL:', fullUrl);
+    
+    // Verify the file exists
+    const fullFilePath = path.join(__dirname, '..', 'uploads', 'profile-pictures', req.file.filename);
+    const fileExists = fs.existsSync(fullFilePath);
+    console.log('   File exists on disk:', fileExists ? 'YES ✅' : 'NO ❌');
+    
+    // Save to database
     user.profilePicture = fullUrl;
     await user.save();
 
-    console.log(`✅ Profile picture uploaded for user: ${user.name}`);
-    console.log(`📸 Picture URL: ${fullUrl}`);
+    console.log('✅ Profile picture saved to database');
+    console.log('✅ Upload complete for:', user.name);
+    console.log('==========================================\n');
 
     res.json({
       success: true,
@@ -124,14 +170,16 @@ router.post('/upload-profile-picture', auth, upload.single('profilePicture'), as
     });
 
   } catch (error) {
-    console.error('Profile picture upload error:', error);
+    console.error('❌ Profile picture upload error:', error);
     
     // Clean up uploaded file if there was an error
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
+      console.log('🗑️ Cleaned up uploaded file after error');
     }
     
     res.status(500).json({ 
+      success: false,
       message: 'Failed to upload profile picture', 
       error: error.message 
     });
@@ -142,10 +190,17 @@ router.post('/upload-profile-picture', auth, upload.single('profilePicture'), as
 // @desc    Delete profile picture (User only)
 router.delete('/delete-profile-picture', auth, async (req, res) => {
   try {
+    console.log('\n🗑️ ===== PROFILE PICTURE DELETE REQUEST =====');
+    console.log('User ID:', req.user.id);
+    
     const user = await User.findById(req.user.id);
     if (!user) {
+      console.log('❌ User not found:', req.user.id);
       return res.status(404).json({ message: 'User not found' });
     }
+
+    console.log('User:', user.name, `(${user.email})`);
+    console.log('Current profile picture:', user.profilePicture || 'None');
 
     // Delete file from filesystem
     if (user.profilePicture) {
@@ -156,13 +211,17 @@ router.delete('/delete-profile-picture', auth, async (req, res) => {
       
       const fullFilePath = path.join(__dirname, '..', 'uploads', filePath);
       
+      console.log('Attempting to delete file:', fullFilePath);
+      
       if (fs.existsSync(fullFilePath)) {
         try {
           fs.unlinkSync(fullFilePath);
-          console.log('🗑️ Profile picture deleted from filesystem');
+          console.log('✅ Profile picture deleted from filesystem');
         } catch (err) {
-          console.error('Error deleting file:', err);
+          console.error('⚠️ Error deleting file:', err);
         }
+      } else {
+        console.log('⚠️ File not found on disk');
       }
     }
 
@@ -170,7 +229,9 @@ router.delete('/delete-profile-picture', auth, async (req, res) => {
     user.profilePicture = null;
     await user.save();
 
-    console.log(`✅ Profile picture removed for user: ${user.name}`);
+    console.log('✅ Profile picture removed from database');
+    console.log('✅ Delete complete for:', user.name);
+    console.log('==========================================\n');
 
     res.json({
       success: true,
@@ -178,11 +239,60 @@ router.delete('/delete-profile-picture', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Profile picture delete error:', error);
+    console.error('❌ Profile picture delete error:', error);
     res.status(500).json({ 
+      success: false,
       message: 'Failed to delete profile picture', 
       error: error.message 
     });
+  }
+});
+
+// ============================================
+// DEBUG ENDPOINT - Check profile picture URL
+// ============================================
+router.get('/debug/profile-picture', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('name email profilePicture');
+    
+    const debugInfo = {
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        profilePictureUrl: user.profilePicture
+      },
+      urlAnalysis: {
+        hasProfilePicture: !!user.profilePicture,
+        isFullUrl: user.profilePicture?.startsWith('http'),
+        isRelativePath: user.profilePicture?.startsWith('/uploads')
+      },
+      serverInfo: {
+        nodeEnv: process.env.NODE_ENV,
+        apiBaseUrl: process.env.API_BASE_URL || 'Not set',
+        protocol: req.protocol,
+        host: req.get('host'),
+        constructedBaseUrl: `${req.protocol}://${req.get('host')}`
+      }
+    };
+
+    // Check if file exists on disk
+    if (user.profilePicture) {
+      const filePath = user.profilePicture.includes('http') 
+        ? user.profilePicture.split('/uploads/')[1] 
+        : user.profilePicture.replace('/uploads/', '');
+      
+      const fullFilePath = path.join(__dirname, '..', 'uploads', filePath);
+      debugInfo.fileSystem = {
+        expectedPath: fullFilePath,
+        fileExists: fs.existsSync(fullFilePath)
+      };
+    }
+
+    res.json(debugInfo);
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
