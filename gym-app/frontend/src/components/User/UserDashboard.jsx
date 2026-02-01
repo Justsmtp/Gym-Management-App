@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
-// frontend/src/components/User/UserDashboard.jsx
+// frontend/src/components/User/UserDashboard.jsx 
 import React, { useState, useEffect } from 'react';
 import { User, CheckCircle, XCircle, QrCode, Clock, LogIn, LogOut, RefreshCw, Menu, X, CreditCard } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -17,19 +17,26 @@ const UserDashboard = () => {
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Profile Picture Component with Persistent Error Handling
+  // Profile Picture Component 
   const ProfilePicture = ({ user, size = 'md', className = '' }) => {
     const [imageError, setImageError] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
     
-    // Key that changes when user or profilePicture changes
-    const imageKey = `${user?._id}-${user?.profilePicture}`;
+    // Key that changes when user or profilePicture changes - with timestamp to force refresh
+    const imageKey = `dashboard-${user?._id}-${user?.profilePicture}-${Date.now()}`;
     
     // Reset state when user or profile picture changes
     useEffect(() => {
+      console.log('🔄 Dashboard ProfilePicture update:', {
+        userId: user?._id,
+        name: user?.name,
+        profilePicture: user?.profilePicture,
+        hasProfilePicture: !!user?.profilePicture
+      });
+      
       setImageError(false);
       setImageLoaded(false);
-    }, [imageKey]);
+    }, [user?._id, user?.profilePicture]);
 
     const sizeClasses = {
       sm: 'w-10 h-10 text-sm',
@@ -39,17 +46,27 @@ const UserDashboard = () => {
     };
 
     const handleImageError = (e) => {
-      console.warn('Image load failed for user:', user?.name, 'URL:', user?.profilePicture);
+      console.error('❌ Dashboard image load failed:', {
+        user: user?.name,
+        url: user?.profilePicture
+      });
       setImageError(true);
       e.target.style.display = 'none';
     };
 
     const handleImageLoad = () => {
+      console.log('✅ Dashboard image loaded:', user?.profilePicture);
       setImageLoaded(true);
     };
 
+    // FIXED: Check for both http:// AND https://
+    const hasValidUrl = user?.profilePicture && (
+      user.profilePicture.startsWith('http://') || 
+      user.profilePicture.startsWith('https://')
+    );
+
     // Show avatar if: no picture, error loading, or invalid URL
-    const shouldShowAvatar = !user?.profilePicture || imageError || !user.profilePicture.startsWith('http');
+    const shouldShowAvatar = !user?.profilePicture || imageError || !hasValidUrl;
 
     if (shouldShowAvatar) {
       return (
@@ -76,8 +93,9 @@ const UserDashboard = () => {
           className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
           onError={handleImageError}
           onLoad={handleImageLoad}
-          loading="lazy"
+          loading="eager"
           referrerPolicy="no-referrer"
+          crossOrigin="anonymous"
         />
       </>
     );
@@ -136,6 +154,7 @@ const UserDashboard = () => {
     const refreshUserData = async () => {
       try {
         const response = await API.get('/auth/me');
+        console.log('🔄 Refreshed user data:', response.data);
         setCurrentUser(response.data);
       } catch (error) {
         console.error('Error refreshing user data:', error);
@@ -175,6 +194,7 @@ const UserDashboard = () => {
       }
       
       if (userRes.data) {
+        console.log('🔄 Manual refresh user data:', userRes.data);
         setCurrentUser(userRes.data);
       }
 
@@ -334,7 +354,7 @@ const UserDashboard = () => {
 
         {loading && !attendanceStatus ? (
           <div className="text-center py-6 md:py-8">
-            <div className="animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-t-4 border-b-4 border-black mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-10 w-10 md:h-12 border-t-4 border-b-4 border-black mx-auto mb-4"></div>
             <p className="text-sm md:text-base text-gray-500">Loading status...</p>
           </div>
         ) : attendanceStatus && attendanceStatus.success && attendanceStatus.checkInTime ? (
