@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-// frontend/src/components/Admin/AdminDashboard.jsx
+// frontend/src/components/Admin/AdminDashboard.jsx 
 import React, { useState, useEffect } from 'react';
 import { Users, CheckCircle, Clock, TrendingUp, RefreshCw, Menu, X, Eye, Mail, Phone, Calendar, CreditCard, Activity } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -8,19 +8,26 @@ import AdminSidebar from './AdminSidebar';
 import AdminSettingsPanel from './AdminSettingsPanel';
 import AttendanceManagement from './AttendanceManagement';
 
-// Reusable Profile Picture Component with Persistent Error Handling
+// Reusable Profile Picture Component 
 const ProfilePicture = ({ user, size = 'md', className = '' }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   
-  // Key that changes when user or profilePicture changes
-  const imageKey = `${user?._id}-${user?.profilePicture}`;
+  // Key that changes when user or profilePicture changes - with timestamp to force refresh
+  const imageKey = `admin-${user?._id}-${user?.profilePicture}-${Date.now()}`;
   
   // Reset state when user or profile picture changes
   useEffect(() => {
+    console.log('🔄 Admin ProfilePicture update:', {
+      userId: user?._id,
+      name: user?.name,
+      profilePicture: user?.profilePicture,
+      hasProfilePicture: !!user?.profilePicture
+    });
+    
     setImageError(false);
     setImageLoaded(false);
-  }, [imageKey]);
+  }, [user?._id, user?.name, user?.profilePicture]);
 
   const sizeClasses = {
     sm: 'w-8 h-8 text-xs',
@@ -30,56 +37,60 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
   };
 
   const handleImageError = (e) => {
-    console.warn('Image load failed for user:', user?.name, 'URL:', user?.profilePicture);
+    console.error('❌ Admin image load failed:', {
+      user: user?.name,
+      url: user?.profilePicture
+    });
     setImageError(true);
     e.target.style.display = 'none';
   };
 
   const handleImageLoad = () => {
+    console.log('✅ Admin image loaded:', user?.profilePicture);
     setImageLoaded(true);
   };
 
-    // FIXED: Check for both http:// AND https://
-    const hasValidUrl = user?.profilePicture && (
-      user.profilePicture.startsWith('http://') || 
-      user.profilePicture.startsWith('https://')
-    );
+  // FIXED: Check for both http:// AND https://
+  const hasValidUrl = user?.profilePicture && (
+    user.profilePicture.startsWith('http://') || 
+    user.profilePicture.startsWith('https://')
+  );
 
-    // Show avatar if: no picture, error loading, or invalid URL
-    const shouldShowAvatar = !user?.profilePicture || imageError || !hasValidUrl;
+  // Show avatar if: no picture, error loading, or invalid URL
+  const shouldShowAvatar = !user?.profilePicture || imageError || !hasValidUrl;
 
-    if (shouldShowAvatar) {
-      return (
-        <div 
-          className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200 flex-shrink-0 ${className}`}
-          title={user?.name || 'User'}
-        >
-          <span className="text-white font-bold">
-            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-          </span>
-        </div>
-      );
-    }
-
+  if (shouldShowAvatar) {
     return (
-      <>
-        {!imageLoaded && (
-          <div className={`${sizeClasses[size]} bg-gray-200 rounded-full animate-pulse border-4 border-gray-200 flex-shrink-0 ${className}`} />
-        )}
-        <img 
-          key={imageKey}
-          src={user.profilePicture}
-          alt={user?.name || 'User'}
-          className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
-          onError={handleImageError}
-          onLoad={handleImageLoad}
-          loading="eager"
-          referrerPolicy="no-referrer"
-          crossOrigin="anonymous"
-        />
-      </>
+      <div 
+        className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200 flex-shrink-0 ${className}`}
+        title={user?.name || 'User'}
+      >
+        <span className="text-white font-bold">
+          {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+        </span>
+      </div>
     );
-  };
+  }
+
+  return (
+    <>
+      {!imageLoaded && (
+        <div className={`${sizeClasses[size]} bg-gray-200 rounded-full animate-pulse border-4 border-gray-200 flex-shrink-0 ${className}`} />
+      )}
+      <img 
+        key={imageKey}
+        src={user.profilePicture}
+        alt={user?.name || 'User'}
+        className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
+        onError={handleImageError}
+        onLoad={handleImageLoad}
+        loading="eager"
+        referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
+      />
+    </>
+  );
+};
 
 
 const AdminDashboard = () => {
