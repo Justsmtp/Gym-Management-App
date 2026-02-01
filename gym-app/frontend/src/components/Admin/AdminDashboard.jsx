@@ -39,40 +39,48 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
     setImageLoaded(true);
   };
 
-  // Show avatar if: no picture, error loading, or invalid URL
-  const shouldShowAvatar = !user?.profilePicture || imageError || !user.profilePicture.startsWith('http');
-
-  if (shouldShowAvatar) {
-    return (
-      <div 
-        className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-2 border-gray-200 flex-shrink-0 ${className}`}
-        title={user?.name || 'User'}
-      >
-        <span className="text-white font-bold">
-          {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-        </span>
-      </div>
+    // FIXED: Check for both http:// AND https://
+    const hasValidUrl = user?.profilePicture && (
+      user.profilePicture.startsWith('http://') || 
+      user.profilePicture.startsWith('https://')
     );
-  }
 
-  return (
-    <>
-      {!imageLoaded && (
-        <div className={`${sizeClasses[size]} bg-gray-200 rounded-full animate-pulse border-2 border-gray-200 flex-shrink-0 ${className}`} />
-      )}
-      <img 
-        key={imageKey}
-        src={user.profilePicture}
-        alt={user?.name || 'User'}
-        className={`${sizeClasses[size]} rounded-full object-cover border-2 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
-        onError={handleImageError}
-        onLoad={handleImageLoad}
-        loading="lazy"
-        referrerPolicy="no-referrer"
-      />
-    </>
-  );
-};
+    // Show avatar if: no picture, error loading, or invalid URL
+    const shouldShowAvatar = !user?.profilePicture || imageError || !hasValidUrl;
+
+    if (shouldShowAvatar) {
+      return (
+        <div 
+          className={`${sizeClasses[size]} bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-4 border-gray-200 flex-shrink-0 ${className}`}
+          title={user?.name || 'User'}
+        >
+          <span className="text-white font-bold">
+            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {!imageLoaded && (
+          <div className={`${sizeClasses[size]} bg-gray-200 rounded-full animate-pulse border-4 border-gray-200 flex-shrink-0 ${className}`} />
+        )}
+        <img 
+          key={imageKey}
+          src={user.profilePicture}
+          alt={user?.name || 'User'}
+          className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
+          onError={handleImageError}
+          onLoad={handleImageLoad}
+          loading="eager"
+          referrerPolicy="no-referrer"
+          crossOrigin="anonymous"
+        />
+      </>
+    );
+  };
+
 
 const AdminDashboard = () => {
   useApp();
