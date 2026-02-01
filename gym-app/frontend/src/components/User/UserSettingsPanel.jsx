@@ -6,7 +6,7 @@ import {
   Headphones, MessageSquare, AlertCircle, ExternalLink, Send
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import API from '../../api/api';
+import api from '../../api/api';
 
 // Profile Picture Component with Persistent Error Handling
 const ProfilePicture = ({ user, size = 'md', className = '' }) => {
