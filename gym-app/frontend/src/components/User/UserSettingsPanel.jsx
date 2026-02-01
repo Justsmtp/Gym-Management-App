@@ -1,4 +1,4 @@
-// frontend/src/components/User/UserSettingsPanel.jsx
+// frontend/src/components/User/UserSettingsPanel.jsx - FINAL FIX
 import React, { useState, useEffect } from 'react';
 import { 
   User, Bell, Lock, CreditCard, Mail, Phone, Save, Eye, EyeOff, 
@@ -8,19 +8,27 @@ import {
 import { useApp } from '../../context/AppContext';
 import API from '../../api/api';
 
-// Profile Picture Component with Persistent Error Handling
+// Profile Picture Component - COMPLETELY FIXED VERSION
 const ProfilePicture = ({ user, size = 'md', className = '' }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   
-  // Key that changes when user or profilePicture changes
-  const imageKey = `${user?._id}-${user?.profilePicture}-${Date.now()}`;
+  // Key that changes when user or profilePicture changes - with timestamp to force refresh
+  const imageKey = `profile-${user?._id}-${Date.now()}`;
   
   // Reset state when user or profile picture changes
   useEffect(() => {
+    console.log('🔄 ProfilePicture component update:', {
+      userId: user?._id,
+      name: user?.name,
+      profilePicture: user?.profilePicture,
+      hasProfilePicture: !!user?.profilePicture,
+      startsWithHttp: user?.profilePicture?.startsWith('http')
+    });
+    
     setImageError(false);
     setImageLoaded(false);
-  }, [user?._id, user?.profilePicture]);
+  }, [user?._id, user?.name, user?.profilePicture]);
 
   const sizeClasses = {
     sm: 'w-10 h-10 text-sm',
@@ -30,17 +38,35 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
   };
 
   const handleImageError = (e) => {
-    console.warn('Image load failed for user:', user?.name, 'URL:', user?.profilePicture);
+    console.error('❌ Image load failed:', {
+      user: user?.name,
+      url: user?.profilePicture,
+      errorEvent: e
+    });
     setImageError(true);
     e.target.style.display = 'none';
   };
 
   const handleImageLoad = () => {
+    console.log('✅ Image loaded successfully:', user?.profilePicture);
     setImageLoaded(true);
   };
 
+  // FIXED: Check for both http:// AND https://
+  const hasValidUrl = user?.profilePicture && (
+    user.profilePicture.startsWith('http://') || 
+    user.profilePicture.startsWith('https://')
+  );
+
   // Show avatar if: no picture, error loading, or invalid URL
-  const shouldShowAvatar = !user?.profilePicture || imageError || !user.profilePicture.startsWith('http');
+  const shouldShowAvatar = !user?.profilePicture || imageError || !hasValidUrl;
+
+  console.log('🖼️ ProfilePicture decision:', {
+    shouldShowAvatar,
+    hasProfilePicture: !!user?.profilePicture,
+    hasValidUrl,
+    imageError
+  });
 
   if (shouldShowAvatar) {
     return (
@@ -67,8 +93,9 @@ const ProfilePicture = ({ user, size = 'md', className = '' }) => {
         className={`${sizeClasses[size]} rounded-full object-cover border-4 border-gray-200 flex-shrink-0 ${className} ${imageLoaded ? '' : 'hidden'}`}
         onError={handleImageError}
         onLoad={handleImageLoad}
-        loading="lazy"
+        loading="eager"
         referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
       />
     </>
   );
@@ -318,7 +345,7 @@ const ProfileModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
   );
 };
 
-// Profile Picture Modal - FIXED VERSION
+// Profile Picture Modal - COMPLETELY FIXED VERSION
 const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMessage }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -368,15 +395,22 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
       console.log('✅ Upload response:', response.data);
 
       if (response.data.success) {
-        // Update user with new profile picture
+        // CRITICAL FIX: Update user with new profile picture AND force re-render
+        const newProfilePicture = response.data.profilePicture;
+        
+        console.log('🔄 Updating currentUser with new profile picture:', newProfilePicture);
+        
         const updatedUser = {
           ...currentUser,
-          profilePicture: response.data.profilePicture
+          profilePicture: newProfilePicture
         };
         
+        // Update both state and localStorage
         setCurrentUser(updatedUser);
         localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-
+        
+        console.log('✅ User state updated:', updatedUser);
+        
         // Show success message in the modal
         setMessage({ type: 'success', text: 'Profile picture updated successfully!' });
         
@@ -384,11 +418,16 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
         setSelectedFile(null);
         setPreviewUrl(null);
         
-        // DON'T close modal immediately - let user see the success message
-        // Close after 2 seconds
+        // Close modal after showing success message
         setTimeout(() => {
+          console.log('🚪 Closing modal');
           closeModal();
-        }, 2000);
+          
+          // Force a page refresh to ensure all components update
+          setTimeout(() => {
+            window.location.reload();
+          }, 100);
+        }, 1500);
       }
     } catch (err) {
       console.error('❌ Upload error:', err);
@@ -412,10 +451,10 @@ const PictureModal = ({ closeModal, currentUser, setCurrentUser, message, setMes
         
         setMessage({ type: 'success', text: 'Profile picture removed successfully!' });
         
-        // Close after showing message
         setTimeout(() => {
           closeModal();
-        }, 2000);
+          window.location.reload();
+        }, 1500);
       }
     } catch (err) {
       setUploadError(err.response?.data?.message || 'Failed to delete picture');
